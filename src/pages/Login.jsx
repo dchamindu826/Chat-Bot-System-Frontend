@@ -13,13 +13,12 @@ const Login = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      // 2. මෙතන අපි අර Import කරපු URL එක පාවිච්චි කරනවා
       const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,11 +26,20 @@ const Login = () => {
       });
 
       const data = await res.json();
+      console.log("Login Response:", data); // Response එක Console එකේ බලාගන්න මේක දාන්න
 
       if (res.ok) {
-        localStorage.setItem('token', data.accessToken);
+        // මෙතන තමයි වෙනස! (Token එක හරියටම ගන්න)
+        const token = data.accessToken || data.token;
+        
+        if (!token) {
+           setError("Login success but no token received!");
+           return;
+        }
+
+        localStorage.setItem('token', token);
         localStorage.setItem('role', data.role);
-        localStorage.setItem('userId', data._id);
+        localStorage.setItem('userId', data._id || data.userId); // userId එකත් සමහරවිට වෙනස් වෙන්න පුළුවන්
         
         if (data.role === 'admin') navigate('/admin/dashboard');
         else navigate('/user/dashboard');
