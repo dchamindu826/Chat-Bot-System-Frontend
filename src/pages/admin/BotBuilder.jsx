@@ -30,16 +30,18 @@ const BotBuilder = () => {
           headers: { token: `Bearer ${token}` }
         });
         const data = await res.json();
+        // ✅ FIX: Default value 'text' walata maru kala (kalin 'content' thibbe)
         if (res.ok && data.length > 0) setReplies(data);
-        else setReplies([{ id: Date.now(), type: 'text', content: 'Welcome!', media: null }]);
+        else setReplies([{ id: Date.now(), type: 'text', text: 'Welcome!', media: null }]); 
       } catch (err) { console.error(err); } 
       finally { setLoading(false); }
     };
     fetchData();
   }, [id]);
 
-  const handleTextChange = (id, text) => {
-    setReplies(replies.map(r => r.id === id ? { ...r, content: text } : r));
+  // ✅ FIX: 'content' wenuwata 'text' update wena widihata haduwa
+  const handleTextChange = (id, val) => {
+    setReplies(replies.map(r => r.id === id ? { ...r, text: val } : r));
   };
 
   const triggerFileUpload = (replyId, type) => {
@@ -65,7 +67,6 @@ const BotBuilder = () => {
     formData.append("file", file);
     formData.append("upload_preset", UPLOAD_PRESET); 
     
-    // PDF/Docs වලට "auto" හෝ "raw" පාවිච්චි කරන්න ඕන. "auto" හොඳයි.
     const resourceType = uploadType === 'image' ? 'image' : (uploadType === 'video' ? 'video' : 'auto');
 
     try {
@@ -82,7 +83,7 @@ const BotBuilder = () => {
                 ...r, 
                 media: data.secure_url, 
                 mediaType: uploadType,
-                fileName: file.name // PDF වල නම පෙන්නන්න ඕන නිසා
+                fileName: file.name 
               } 
             : r
         ));
@@ -102,8 +103,9 @@ const BotBuilder = () => {
     setReplies(replies.map(r => r.id === id ? { ...r, media: null, mediaType: null, fileName: null } : r));
   };
 
+  // ✅ FIX: Aluth step ekak add weddi 'text' field eka use karanna
   const addNewReply = () => {
-    setReplies([...replies, { id: Date.now(), type: 'text', content: '', media: null }]);
+    setReplies([...replies, { id: Date.now(), type: 'text', text: '', media: null }]);
   };
 
   const deleteReply = (id) => {
@@ -119,6 +121,7 @@ const BotBuilder = () => {
         body: JSON.stringify({ userId: id, replies: replies })
       });
       if (res.ok) alert("Bot Config Saved Successfully!");
+      else alert("Save Failed! Check console.");
     } catch (err) { console.error(err); } 
     finally { setSaving(false); }
   };
@@ -162,7 +165,14 @@ const BotBuilder = () => {
                   <button onClick={() => deleteReply(reply.id)} className="text-slate-500 hover:text-danger"><Trash2 size={18} /></button>
                 </div>
                 <div className="space-y-4">
-                  <textarea value={reply.content} onChange={(e) => handleTextChange(reply.id, e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-primary min-h-[80px]" placeholder="Type message..." />
+                  
+                  {/* ✅ FIX: Value and OnChange updated to use 'text' */}
+                  <textarea 
+                    value={reply.text} 
+                    onChange={(e) => handleTextChange(reply.id, e.target.value)} 
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-primary min-h-[80px]" 
+                    placeholder="Type message..." 
+                  />
                   
                   <div className="flex flex-wrap gap-3">
                     <button onClick={() => triggerFileUpload(reply.id, 'image')} className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl text-sm text-slate-300 hover:bg-white/10 border border-white/5">
@@ -192,13 +202,12 @@ const BotBuilder = () => {
         {/* RIGHT: Preview */}
         <div className="w-full lg:w-[400px] flex-shrink-0 flex flex-col items-center">
           <div className="relative w-[320px] h-[600px] bg-black rounded-[3rem] border-8 border-slate-800 shadow-2xl overflow-hidden mb-6">
-             <div className="bg-[#075E54] p-4 pt-10 flex items-center gap-3"><p className="text-white font-bold">Bot Preview</p></div>
-             <div className="h-full bg-[#0b141a] p-4 overflow-y-auto pb-20" style={{ backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")' }}>
+              <div className="bg-[#075E54] p-4 pt-10 flex items-center gap-3"><p className="text-white font-bold">Bot Preview</p></div>
+              <div className="h-full bg-[#0b141a] p-4 overflow-y-auto pb-20" style={{ backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")' }}>
                 {replies.map((r) => (
                   <div key={r.id} className="mb-4 flex justify-start">
                     <div className="bg-[#202c33] text-white p-2 rounded-lg max-w-[85%] text-sm border border-white/5">
                       
-                      {/* Media Display Logic */}
                       {r.media && (
                         <div className="mb-2 rounded overflow-hidden">
                            {r.mediaType === 'image' && <img src={r.media} className="w-full object-cover" alt="media" />}
@@ -215,7 +224,8 @@ const BotBuilder = () => {
                         </div>
                       )}
                       
-                      <p>{r.content || "..."}</p>
+                      {/* ✅ FIX: Preview eketh 'text' use kala */}
+                      <p>{r.text || "..."}</p>
                     </div>
                   </div>
                 ))}

@@ -15,14 +15,23 @@ import UserInbox from './pages/user/UserInbox';
 import UserBotConfig from './pages/user/UserBotConfig';
 import UserTools from './pages/user/UserTools';
 import UserSettings from './pages/user/UserSettings';
-import UserTeam from './pages/user/UserTeam'; // <--- New Import
+import UserTeam from './pages/user/UserTeam';
+import UserAgentDash from './pages/user/UserAgentDash';
 
+// ✅ ProtectedRoute එක Update කළා (Array support කරන්න)
 const ProtectedRoute = ({ children, allowedRole }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
 
   if (!token) return <Navigate to="/login" replace />;
-  if (allowedRole && role !== allowedRole) return <Navigate to="/login" replace />;
+
+  // Role එක Array එකක්ද කියලා බලලා check කරනවා
+  if (Array.isArray(allowedRole)) {
+    if (!allowedRole.includes(role)) return <Navigate to="/login" replace />;
+  } else {
+    if (allowedRole && role !== allowedRole) return <Navigate to="/login" replace />;
+  }
+  
   return children;
 };
 
@@ -47,15 +56,20 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* User Routes */}
+        {/* User & Agent Routes */}
         <Route path="/user/*" element={
-          <ProtectedRoute allowedRole="user">
+          // ✅ මෙතන තමයි වෙනස: 'user' සහ 'agent' දෙන්නටම අවසර දුන්නා
+          <ProtectedRoute allowedRole={['user', 'agent']}> 
               <Routes>
                  <Route path="dashboard" element={<UserDashboard />} />
                  <Route path="inbox" element={<UserInbox />} />
-                 <Route path="team" element={<UserTeam />} /> {/* <--- New Route */}
+                 <Route path="team" element={<UserTeam />} />
                  <Route path="my-bot" element={<UserBotConfig />} />
                  <Route path="tools" element={<UserTools />} />
+                 
+                 {/* ✅ Agent Dashboard Route එක */}
+                 <Route path="agent-dashboard" element={<UserAgentDash />} />
+                 
                  <Route path="settings" element={<UserSettings />} />
               </Routes>
           </ProtectedRoute>

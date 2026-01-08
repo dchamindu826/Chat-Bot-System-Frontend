@@ -32,12 +32,15 @@ const Login = () => {
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("role", data.role);
       localStorage.setItem("userId", data._id);
+      localStorage.setItem("name", data.name);
 
       // Redirect based on Role
       if (data.role === "admin") {
         navigate("/admin/dashboard");
+      } else if (data.role === "agent") {
+        navigate("/user/agent-dashboard"); // ✅ Agent ව වෙනම යවනවා
       } else {
-        navigate("/user/dashboard");
+        navigate("/user/dashboard"); // Client (Manager)
       }
       
     } catch (err) {
