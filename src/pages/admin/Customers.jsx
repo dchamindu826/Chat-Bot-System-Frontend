@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MessageSquare, Phone, Mail, UserCheck, Plus, X, Loader, Edit, Trash2, Power, Key } from 'lucide-react';
+import { Search, MessageSquare, Phone, Mail, UserCheck, Plus, X, Loader, Edit, Trash2, Power, Key, LogIn } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
-
 
 const Customers = () => {
   const navigate = useNavigate();
@@ -19,7 +18,6 @@ const Customers = () => {
   
   const [formData, setFormData] = useState({
     name: '', email: '', password: '', businessName: '', phone: '',
-    // New Meta Fields
     phoneNumberId: '',
     accessToken: ''
   });
@@ -39,6 +37,34 @@ const Customers = () => {
 
   useEffect(() => { fetchClients(); }, []);
 
+  // --- GHOST LOGIN FUNCTION ---
+  const handleGhostLogin = async (client) => {
+    if(!window.confirm(`⚠️ Warning: You are about to log in as "${client.businessName || client.name}".\n\nYou will be logged out from the Admin account.`)) return;
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/ghost-login/${client._id}`, {
+        method: 'POST',
+        headers: { token: `Bearer ${token}` }
+      });
+      
+      const data = await res.json();
+
+      if (res.ok) {
+        localStorage.setItem('token', data.accessToken);
+        localStorage.setItem('role', 'user');
+        localStorage.setItem('userId', data._id);
+        
+        navigate('/user/dashboard');
+        window.location.reload(); 
+      } else {
+        alert(data || "Ghost Login Failed!");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network Error during Ghost Login");
+    }
+  };
+
   const openAddModal = () => {
     setIsEditMode(false);
     setFormData({ name: '', email: '', password: '', businessName: '', phone: '', phoneNumberId: '', accessToken: '' });
@@ -54,7 +80,6 @@ const Customers = () => {
       password: '', 
       businessName: client.businessName || '', 
       phone: client.phone || '',
-      // Load Existing Meta Config (if any)
       phoneNumberId: client.whatsappConfig?.phoneNumberId || '',
       accessToken: client.whatsappConfig?.accessToken || ''
     });
@@ -71,13 +96,11 @@ const Customers = () => {
     
     const method = isEditMode ? 'PUT' : 'POST';
     
-    // Prepare Data (Structure it for backend)
     const dataToSend = {
       name: formData.name,
       email: formData.email,
       businessName: formData.businessName,
       phone: formData.phone,
-      // Group Meta Fields into 'whatsappConfig' object
       whatsappConfig: {
         phoneNumberId: formData.phoneNumberId,
         accessToken: formData.accessToken
@@ -103,7 +126,6 @@ const Customers = () => {
     finally { setSubmitLoading(false); }
   };
 
-  // ... (Delete and Status Toggle functions - same as before) ...
   const handleDelete = async (id) => {
     if(!window.confirm("Delete this client?")) return;
     try {
@@ -152,6 +174,11 @@ const Customers = () => {
             <motion.div key={client._id} layout className={`glass-panel p-6 rounded-3xl border ${client.status === 'inactive' ? 'border-red-500/30 opacity-75' : 'border-white/5'} relative group`}>
               
               <div className="absolute top-4 right-4 flex gap-2">
+                 {/* Ghost Login Button */}
+                 <button onClick={() => handleGhostLogin(client)} className="p-2 bg-purple-500/20 hover:bg-purple-500/40 rounded-full text-purple-400 hover:text-white" title="Login as User">
+                    <LogIn size={16} />
+                 </button>
+                 
                  <button onClick={() => toggleStatus(client)} className={`p-2 rounded-full ${client.status === 'active' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}><Power size={16} /></button>
                  <button onClick={() => openEditModal(client)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white"><Edit size={16} /></button>
                  <button onClick={() => handleDelete(client._id)} className="p-2 bg-white/5 hover:bg-red-500/20 rounded-full text-slate-400 hover:text-red-500"><Trash2 size={16} /></button>
@@ -168,22 +195,28 @@ const Customers = () => {
               </div>
 
               <div className="space-y-3 mb-6 text-sm text-slate-400">
-                 <div className="flex gap-3"><UserCheck size={16} className="text-primary/70"/> {client.name}</div>
-                 <div className="flex gap-3"><Mail size={16} className="text-secondary/70"/> {client.email}</div>
-                 <div className="flex gap-3 items-center"><Phone size={16} className="text-emerald-500/70"/> <span>{client.phone || "No Phone"}</span></div>
-                 
-                 {/* Indicator if Meta Config exists */}
-                 <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2">
+                  <div className="flex gap-3"><UserCheck size={16} className="text-primary/70"/> {client.name}</div>
+                  <div className="flex gap-3"><Mail size={16} className="text-secondary/70"/> {client.email}</div>
+                  <div className="flex gap-3 items-center"><Phone size={16} className="text-emerald-500/70"/> <span>{client.phone || "No Phone"}</span></div>
+                  
+                  <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2">
                     <Key size={14} className={client.whatsappConfig?.phoneNumberId ? "text-emerald-400" : "text-slate-600"} />
                     <span className={client.whatsappConfig?.phoneNumberId ? "text-emerald-400 text-xs" : "text-slate-600 text-xs"}>
                         {client.whatsappConfig?.phoneNumberId ? "Meta Connected" : "No API Keys"}
                     </span>
-                 </div>
+                  </div>
               </div>
 
-              <button onClick={() => navigate(`/admin/bot-builder/${client._id}`)} className="w-full py-3 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2">
-                <MessageSquare size={16} /> Config Bot
-              </button>
+              {/* Action Buttons: Config & Inbox */}
+              <div className="flex gap-2 mt-4">
+                  <button onClick={() => navigate(`/admin/bot-builder/${client._id}`)} className="flex-1 py-3 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2">
+                    <MessageSquare size={16} /> Config Bot
+                  </button>
+                  <button onClick={() => navigate(`/admin/inbox/${client._id}`)} className="px-4 py-3 bg-[#1e293b] hover:bg-slate-700 border border-white/10 text-white font-bold rounded-xl flex items-center justify-center" title="View Inbox">
+                    <Mail size={18} />
+                  </button>
+              </div>
+
             </motion.div>
           ))}
         </div>
@@ -198,7 +231,6 @@ const Customers = () => {
                 <h2 className="text-2xl font-bold text-white mb-6">{isEditMode ? 'Edit Client' : 'Add New Client'}</h2>
                 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* Basic Details */}
                   <div className="space-y-4 p-4 bg-white/5 rounded-xl border border-white/5">
                       <h3 className="text-sm font-bold text-slate-300 uppercase">Basic Info</h3>
                       <input name="businessName" value={formData.businessName} onChange={(e) => setFormData({...formData, businessName: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white" placeholder="Business Name" required />
@@ -210,7 +242,6 @@ const Customers = () => {
                       <input name="password" type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white" placeholder={isEditMode ? "New Password (Optional)" : "Password"} required={!isEditMode} />
                   </div>
 
-                  {/* Meta Credentials Section */}
                   <div className="space-y-4 p-4 bg-emerald-900/10 rounded-xl border border-emerald-500/20">
                       <h3 className="text-sm font-bold text-emerald-400 uppercase flex items-center gap-2"><Key size={14}/> Meta API Config</h3>
                       <div>

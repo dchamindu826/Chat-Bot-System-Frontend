@@ -1,14 +1,24 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutGrid, Users, Bot, BarChart2, Settings, Zap } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { LayoutGrid, Users, Bot, BarChart2, Settings, Zap, Activity, LogOut } from 'lucide-react';
 
 const Sidebar = ({ role }) => {
+  const navigate = useNavigate();
+
   const menuItems = [
-    { icon: LayoutGrid, label: 'Dashboard', path: '/admin/dashboard' }, // URL updated
+    { icon: LayoutGrid, label: 'Dashboard', path: '/admin/dashboard' },
     { icon: Users, label: 'Customers', path: '/admin/customers' },
+    { icon: Activity, label: 'System Logs', path: '/admin/logs' },
     { icon: BarChart2, label: 'Analytics', path: '/admin/analytics' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ];
+
+  const handleLogout = () => {
+    if(window.confirm("Are you sure you want to logout?")) {
+      localStorage.clear(); // Token ඔක්කොම මකනවා
+      navigate('/login'); // Login එකට යවනවා
+    }
+  };
 
   return (
     <div className="fixed left-4 top-4 bottom-4 w-20 lg:w-64 rounded-3xl flex flex-col p-4 z-50 glass-sidebar shadow-2xl shadow-black/50 transition-all duration-300">
@@ -43,19 +53,32 @@ const Sidebar = ({ role }) => {
         ))}
       </nav>
 
-      {/* Show Pro Plan ONLY if user is NOT an admin */}
-      {role !== 'admin' && (
-        <div className="mt-auto mb-4 p-4 rounded-2xl hidden lg:block relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 border border-white/5">
-          <div className="relative z-10">
-            <h4 className="font-bold text-sm mb-1 text-white">Pro Plan</h4>
-            <p className="text-xs text-slate-400 mb-3">Unlock AI Features</p>
-            <button className="w-full py-2 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-bold rounded-lg transition-colors border border-primary/20">
-              Upgrade Now
-            </button>
+      {/* Bottom Section */}
+      <div className="mt-auto space-y-4">
+        
+        {/* Pro Plan Card (Only for Non-Admins) */}
+        {role !== 'admin' && (
+          <div className="p-4 rounded-2xl hidden lg:block relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 border border-white/5">
+            <div className="relative z-10">
+              <h4 className="font-bold text-sm mb-1 text-white">Pro Plan</h4>
+              <p className="text-xs text-slate-400 mb-3">Unlock AI Features</p>
+              <button className="w-full py-2 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-bold rounded-lg transition-colors border border-primary/20">
+                Upgrade Now
+              </button>
+            </div>
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/20 blur-xl rounded-full"></div>
           </div>
-          <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/20 blur-xl rounded-full"></div>
-        </div>
-      )}
+        )}
+
+        {/* LOGOUT BUTTON */}
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-red-400 hover:bg-red-500/10 hover:text-red-500 transition-all duration-300 group"
+        >
+          <LogOut size={22} strokeWidth={1.5} />
+          <span className="font-medium hidden lg:block">Logout</span>
+        </button>
+      </div>
 
     </div>
   );

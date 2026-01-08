@@ -4,15 +4,25 @@ import Login from './pages/Login';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import BotBuilder from './pages/admin/BotBuilder';
 import Customers from './pages/admin/Customers';
+import Inbox from './pages/admin/Inbox'; 
+import SystemLogs from './pages/admin/SystemLogs';
+import Analytics from './pages/admin/Analytics';
+import Settings from './pages/admin/Settings';
 
-// Protected Route Component... (මේ කෑල්ල වෙනසක් නෑ)
+// User Imports
+import UserDashboard from './pages/user/UserDashboard';
+import UserInbox from './pages/user/UserInbox';
+import UserBotConfig from './pages/user/UserBotConfig';
+import UserTools from './pages/user/UserTools';
+import UserSettings from './pages/user/UserSettings';
+import UserTeam from './pages/user/UserTeam'; // <--- New Import
+
 const ProtectedRoute = ({ children, allowedRole }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
 
   if (!token) return <Navigate to="/login" replace />;
   if (allowedRole && role !== allowedRole) return <Navigate to="/login" replace />;
-  
   return children;
 };
 
@@ -28,10 +38,11 @@ function App() {
              <Routes>
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="customers" element={<Customers />} />
-                
-                {/* 👇 මෙන්න මේ Line එක වෙනස් කරන්න (/:id එකතු කරන්න) */}
                 <Route path="bot-builder/:id" element={<BotBuilder />} />
-
+                <Route path="logs" element={<SystemLogs />} />
+                <Route path="inbox/:clientId" element={<Inbox />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="settings" element={<Settings />} />
              </Routes>
           </ProtectedRoute>
         } />
@@ -39,7 +50,14 @@ function App() {
         {/* User Routes */}
         <Route path="/user/*" element={
           <ProtectedRoute allowedRole="user">
-             <AdminDashboard /> 
+              <Routes>
+                 <Route path="dashboard" element={<UserDashboard />} />
+                 <Route path="inbox" element={<UserInbox />} />
+                 <Route path="team" element={<UserTeam />} /> {/* <--- New Route */}
+                 <Route path="my-bot" element={<UserBotConfig />} />
+                 <Route path="tools" element={<UserTools />} />
+                 <Route path="settings" element={<UserSettings />} />
+              </Routes>
           </ProtectedRoute>
         } />
 
