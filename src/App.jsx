@@ -8,6 +8,7 @@ import Inbox from './pages/admin/Inbox';
 import SystemLogs from './pages/admin/SystemLogs';
 import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
+import Register from './pages/Register';
 
 // User Imports
 import UserDashboard from './pages/user/UserDashboard';
@@ -76,6 +77,7 @@ function App() {
         } />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/register" element={<Register />} />
       </Routes>
     </BrowserRouter>
   );
