@@ -21,8 +21,15 @@ const UserTeam = () => {
   // 1. Fetch Agents
   const fetchAgents = async () => {
     try {
-        const res = await fetch(`${API_BASE_URL}/api/team/agents`, { headers: { token: `Bearer ${token}` } });
-        if (res.ok) setAgents(await res.json());
+        const res = await fetch(`${API_BASE_URL}/api/team/agents`, { 
+            headers: { token: `Bearer ${token}` } 
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setAgents(data);
+        } else {
+            console.error("Failed to fetch agents");
+        }
     } catch (err) { console.error(err); }
   };
 
@@ -32,20 +39,24 @@ const UserTeam = () => {
   const handleAgentClick = async (agent) => {
       setSelectedAgent(agent);
       // Fetch Chats for Agent
-      const chatRes = await fetch(`${API_BASE_URL}/api/crm/contacts?agentId=${agent._id}`, { 
-          headers: { token: `Bearer ${token}` } 
-      });
-      if(chatRes.ok) {
-          const chats = await chatRes.json();
-          setAgentChats(chats);
-          
-          // Calculate Stats locally (Preserving Call Campaign Logic)
-          setAgentStats({
-              total: chats.length,
-              answered: chats.filter(c => c.callStatus === 'Answered').length,
-              rejected: chats.filter(c => c.callStatus === 'Reject').length,
-              pending: chats.filter(c => c.callStatus === 'Pending').length
+      try {
+          const chatRes = await fetch(`${API_BASE_URL}/api/crm/contacts?agentId=${agent._id}`, { 
+              headers: { token: `Bearer ${token}` } 
           });
+          if(chatRes.ok) {
+              const chats = await chatRes.json();
+              setAgentChats(chats);
+              
+              // Calculate Stats locally
+              setAgentStats({
+                  total: chats.length,
+                  answered: chats.filter(c => c.callStatus === 'Answered').length,
+                  rejected: chats.filter(c => c.callStatus === 'Reject').length,
+                  pending: chats.filter(c => c.callStatus === 'Pending' || !c.callStatus).length
+              });
+          }
+      } catch (err) {
+          console.error("Error loading agent details", err);
       }
   };
 
@@ -54,6 +65,7 @@ const UserTeam = () => {
       e.preventDefault();
       setLoading(true);
 
+      // Backend Routes වලට හරියටම ගැලපෙන URL
       const url = isEditMode 
         ? `${API_BASE_URL}/api/team/agent/${formData.id}`
         : `${API_BASE_URL}/api/team/add-agent`;
@@ -67,16 +79,23 @@ const UserTeam = () => {
             body: JSON.stringify(formData)
         });
 
+        const data = await res.json();
+
         if(res.ok) {
             setShowModal(false);
             fetchAgents();
-            alert(isEditMode ? "Agent Updated!" : "Agent Added Successfully!");
+            alert(isEditMode ? "Agent Updated Successfully!" : "Agent Added Successfully!");
+            // Reset form
+            setFormData({ id: '', name: '', email: '', password: '' });
         } else {
-            const err = await res.json();
-            alert(err.message || "Operation Failed");
+            alert(data.message || "Operation Failed");
         }
-      } catch(err) { console.error(err); }
-      finally { setLoading(false); }
+      } catch(err) { 
+          console.error(err);
+          alert("Network Error");
+      } finally { 
+          setLoading(false); 
+      }
   };
 
   // 4. Handle Delete
@@ -85,12 +104,17 @@ const UserTeam = () => {
       if(!window.confirm("Are you sure? This agent and their assignment data will be lost.")) return;
       
       try {
-          await fetch(`${API_BASE_URL}/api/team/agent/${id}`, {
+          const res = await fetch(`${API_BASE_URL}/api/team/agent/${id}`, {
               method: 'DELETE',
               headers: { token: `Bearer ${token}` }
           });
-          fetchAgents();
-          if(selectedAgent?._id === id) setSelectedAgent(null);
+          
+          if (res.ok) {
+              fetchAgents();
+              if(selectedAgent?._id === id) setSelectedAgent(null);
+          } else {
+              alert("Failed to delete agent");
+          }
       } catch(err) { console.error(err); }
   };
 
@@ -104,7 +128,7 @@ const UserTeam = () => {
   const openEditModal = (e, agent) => {
       e.stopPropagation();
       setIsEditMode(true);
-      setFormData({ id: agent._id, name: agent.name, email: agent.email, password: '' }); // Password empty by default
+      setFormData({ id: agent._id, name: agent.name, email: agent.email, password: '' }); 
       setShowModal(true);
   };
 
@@ -113,7 +137,7 @@ const UserTeam = () => {
       <div className="flex flex-col lg:flex-row gap-6 h-[85vh]">
         
         {/* --- LEFT: AGENT LIST --- */}
-        <div className={`${selectedAgent ? 'w-full lg:w-1/3' : 'w-full'} transition-all duration-300 flex flex-col`}>
+        <div className={`${selectedAgent ? 'hidden lg:flex lg:w-1/3' : 'w-full'} transition-all duration-300 flex flex-col`}>
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-3xl font-bold text-white">My Team</h2>
@@ -125,14 +149,20 @@ const UserTeam = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
-                {agents.length === 0 ? <p className="text-slate-500 text-center mt-10">No agents added yet.</p> : 
+                {agents.length === 0 ? (
+                    <div className="text-slate-500 text-center mt-10 border border-dashed border-white/10 p-10 rounded-2xl">
+                        <Users size={40} className="mx-auto mb-4 opacity-50"/>
+                        <p>No agents added yet.</p>
+                        <button onClick={openAddModal} className="text-blue-400 text-sm mt-2 hover:underline">Add your first agent</button>
+                    </div>
+                ) : (
                  agents.map((agent) => (
                     <div key={agent._id} onClick={() => handleAgentClick(agent)} 
                         className={`glass-panel p-4 rounded-2xl border cursor-pointer hover:bg-white/5 transition group relative ${selectedAgent?._id === agent._id ? 'border-blue-500 bg-blue-500/10' : 'border-white/5'}`}>
                         
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg shadow-inner">
-                                {agent.name.charAt(0)}
+                                {agent.name ? agent.name.charAt(0).toUpperCase() : "U"}
                             </div>
                             <div className="flex-1">
                                 <h3 className="font-bold text-white text-lg">{agent.name}</h3>
@@ -146,12 +176,13 @@ const UserTeam = () => {
                             <button onClick={(e) => handleDelete(e, agent._id)} className="p-2 bg-white/10 hover:bg-red-500 hover:text-white rounded-lg text-slate-300 transition"><Trash2 size={14}/></button>
                         </div>
                     </div>
-                ))}
+                 ))
+                )}
             </div>
         </div>
 
         {/* --- RIGHT: AGENT DETAILS DRAWER --- */}
-        {selectedAgent && (
+        {selectedAgent ? (
             <div className="flex-1 glass-panel rounded-3xl border border-white/10 bg-[#0f172a]/95 p-6 flex flex-col animate-in slide-in-from-right duration-300 relative overflow-hidden">
                 {/* Background Decor */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
@@ -160,7 +191,7 @@ const UserTeam = () => {
                 <div className="flex justify-between items-start mb-8 relative z-10">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-3xl shadow-lg shadow-blue-500/25">
-                            {selectedAgent.name.charAt(0)}
+                            {selectedAgent.name ? selectedAgent.name.charAt(0).toUpperCase() : "A"}
                         </div>
                         <div>
                             <h2 className="text-2xl font-bold text-white">{selectedAgent.name}</h2>
@@ -175,9 +206,9 @@ const UserTeam = () => {
                     <button onClick={() => setSelectedAgent(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition"><X size={20}/></button>
                 </div>
 
-                {/* KPI Cards (Preserving Call Campaign Stats) */}
+                {/* KPI Cards */}
                 {agentStats && (
-                    <div className="grid grid-cols-4 gap-4 mb-8 relative z-10">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 relative z-10">
                         <div className="bg-blue-500/10 p-4 rounded-2xl border border-blue-500/20 text-center">
                             <h3 className="text-3xl font-bold text-white">{agentStats.total}</h3>
                             <p className="text-xs text-blue-300 uppercase font-bold tracking-wider mt-1">Assigned</p>
@@ -221,7 +252,7 @@ const UserTeam = () => {
                                     </div>
                                     <div className="text-right">
                                         <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${chat.callStatus === 'Answered' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-300'}`}>
-                                            {chat.callStatus}
+                                            {chat.callStatus || 'Pending'}
                                         </span>
                                         <p className="text-[10px] text-slate-600 mt-1">{new Date(chat.updatedAt).toLocaleDateString()}</p>
                                     </div>
@@ -229,6 +260,14 @@ const UserTeam = () => {
                             ))
                         )}
                     </div>
+                </div>
+            </div>
+        ) : (
+            // Placeholder when no agent selected
+            <div className="hidden lg:flex w-2/3 items-center justify-center text-slate-600 bg-black/20 rounded-3xl border border-white/5 border-dashed">
+                <div className="text-center">
+                    <Users size={64} className="mx-auto mb-4 opacity-20"/>
+                    <p>Select an agent to view performance details</p>
                 </div>
             </div>
         )}

@@ -19,14 +19,12 @@ import UserSettings from './pages/user/UserSettings';
 import UserTeam from './pages/user/UserTeam';
 import UserAgentDash from './pages/user/UserAgentDash';
 
-// ✅ ProtectedRoute එක Update කළා (Array support කරන්න)
 const ProtectedRoute = ({ children, allowedRole }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
 
   if (!token) return <Navigate to="/login" replace />;
 
-  // Role එක Array එකක්ද කියලා බලලා check කරනවා
   if (Array.isArray(allowedRole)) {
     if (!allowedRole.includes(role)) return <Navigate to="/login" replace />;
   } else {
@@ -42,13 +40,16 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         
-        {/* Admin Routes */}
+        {/* --- ADMIN ROUTES --- */}
         <Route path="/admin/*" element={
           <ProtectedRoute allowedRole="admin">
              <Routes>
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="customers" element={<Customers />} />
-                <Route path="bot-builder/:id" element={<BotBuilder />} />
+                
+                {/* ✅ FIXED ROUTE: Removed '/admin' prefix because parent handles it */}
+                <Route path="bot-builder/:userId" element={<BotBuilder />} />
+                
                 <Route path="logs" element={<SystemLogs />} />
                 <Route path="inbox/:clientId" element={<Inbox />} />
                 <Route path="analytics" element={<Analytics />} />
@@ -57,9 +58,8 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* User & Agent Routes */}
+        {/* --- USER ROUTES --- */}
         <Route path="/user/*" element={
-          // ✅ මෙතන තමයි වෙනස: 'user' සහ 'agent' දෙන්නටම අවසර දුන්නා
           <ProtectedRoute allowedRole={['user', 'agent']}> 
               <Routes>
                  <Route path="dashboard" element={<UserDashboard />} />
@@ -67,10 +67,7 @@ function App() {
                  <Route path="team" element={<UserTeam />} />
                  <Route path="my-bot" element={<UserBotConfig />} />
                  <Route path="tools" element={<UserTools />} />
-                 
-                 {/* ✅ Agent Dashboard Route එක */}
                  <Route path="agent-dashboard" element={<UserAgentDash />} />
-                 
                  <Route path="settings" element={<UserSettings />} />
               </Routes>
           </ProtectedRoute>
