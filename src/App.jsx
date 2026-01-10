@@ -9,6 +9,7 @@ import SystemLogs from './pages/admin/SystemLogs';
 import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
 import Register from './pages/Register';
+import { ThemeProvider } from './context/ThemeContext';
 
 // User Imports
 import UserDashboard from './pages/user/UserDashboard';
@@ -36,47 +37,49 @@ const ProtectedRoute = ({ children, allowedRole }) => {
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        
-        {/* --- ADMIN ROUTES --- */}
-        <Route path="/admin/*" element={
-          <ProtectedRoute allowedRole="admin">
-             <Routes>
-                <Route path="dashboard" element={<AdminDashboard />} />
-                <Route path="customers" element={<Customers />} />
-                
-                {/* ✅ FIXED ROUTE: Removed '/admin' prefix because parent handles it */}
-                <Route path="bot-builder/:userId" element={<BotBuilder />} />
-                
-                <Route path="logs" element={<SystemLogs />} />
-                <Route path="inbox/:clientId" element={<Inbox />} />
-                <Route path="analytics" element={<Analytics />} />
-                <Route path="settings" element={<Settings />} />
-             </Routes>
-          </ProtectedRoute>
-        } />
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          
+          {/* --- ADMIN ROUTES --- */}
+          <Route path="/admin/*" element={
+            <ProtectedRoute allowedRole="admin">
+               <Routes>
+                  <Route path="dashboard" element={<AdminDashboard />} />
+                  <Route path="customers" element={<Customers />} />
+                  
+                  {/* ✅ FIXED ROUTE: Removed '/admin' prefix because parent handles it */}
+                  <Route path="bot-builder/:userId" element={<BotBuilder />} />
+                  
+                  <Route path="logs" element={<SystemLogs />} />
+                  <Route path="inbox/:clientId" element={<Inbox />} />
+                  <Route path="analytics" element={<Analytics />} />
+                  <Route path="settings" element={<Settings />} />
+               </Routes>
+            </ProtectedRoute>
+          } />
 
-        {/* --- USER ROUTES --- */}
-        <Route path="/user/*" element={
-          <ProtectedRoute allowedRole={['user', 'agent']}> 
-              <Routes>
-                 <Route path="dashboard" element={<UserDashboard />} />
-                 <Route path="inbox" element={<UserInbox />} />
-                 <Route path="team" element={<UserTeam />} />
-                 <Route path="my-bot" element={<UserBotConfig />} />
-                 <Route path="tools" element={<UserTools />} />
-                 <Route path="agent-dashboard" element={<UserAgentDash />} />
-                 <Route path="settings" element={<UserSettings />} />
-              </Routes>
-          </ProtectedRoute>
-        } />
+          {/* --- USER ROUTES --- */}
+          <Route path="/user/*" element={
+            <ProtectedRoute allowedRole={['user', 'agent']}> 
+                <Routes>
+                   <Route path="dashboard" element={<UserDashboard />} />
+                   <Route path="inbox" element={<UserInbox />} />
+                   <Route path="team" element={<UserTeam />} />
+                   <Route path="my-bot" element={<UserBotConfig />} />
+                   <Route path="tools" element={<UserTools />} />
+                   <Route path="agent-dashboard" element={<UserAgentDash />} />
+                   <Route path="settings" element={<UserSettings />} />
+                </Routes>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/register" element={<Register />} />
-      </Routes>
-    </BrowserRouter>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/register" element={<Register />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

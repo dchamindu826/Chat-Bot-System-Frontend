@@ -39,7 +39,7 @@ const Login = () => {
       if (data.role === "admin") {
         navigate("/admin/dashboard");
       } else if (data.role === "agent") {
-        navigate("/user/agent-dashboard"); // Agent Dashboard
+        navigate("/user/agent-dashboard"); // Redirects Agent here
       } else {
         navigate("/user/dashboard"); // Client Dashboard
       }
