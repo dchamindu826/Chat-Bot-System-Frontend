@@ -10,6 +10,7 @@ import Analytics from './pages/admin/Analytics';
 import Settings from './pages/admin/Settings';
 import Register from './pages/Register';
 import { ThemeProvider } from './context/ThemeContext';
+import GhostAccess from './pages/GhostAccess';
 
 // User Imports
 import UserDashboard from './pages/user/UserDashboard';
@@ -56,6 +57,7 @@ function App() {
                   <Route path="inbox/:clientId" element={<Inbox />} />
                   <Route path="analytics" element={<Analytics />} />
                   <Route path="settings" element={<Settings />} />
+                  <Route path="/ghost-access" element={<GhostAccess />} />
                </Routes>
             </ProtectedRoute>
           } />

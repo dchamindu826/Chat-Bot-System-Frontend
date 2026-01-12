@@ -37,12 +37,13 @@ const Customers = () => {
 
   useEffect(() => { fetchClients(); }, []);
 
-  // --- GHOST LOGIN FUNCTION ---
+  // --- 🔥 UPDATED GHOST LOGIN (NEW TAB) ---
   const handleGhostLogin = async (client) => {
-    if(!window.confirm(`⚠️ Warning: You are about to log in as "${client.businessName || client.name}".\n\nYou will be logged out from the Admin account.`)) return;
+    if(!window.confirm(`⚠️ Warning: You are about to log in as "${client.businessName || client.name}".\n\nA new tab will open for this session.`)) return;
     
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users/ghost-login/${client._id}`, {
+      // 1. Request a temporary access token for this user
+      const res = await fetch(`${API_BASE_URL}/api/auth/ghost-login/${client._id}`, { // Make sure this route exists in backend
         method: 'POST',
         headers: { token: `Bearer ${token}` }
       });
@@ -50,14 +51,11 @@ const Customers = () => {
       const data = await res.json();
 
       if (res.ok) {
-        localStorage.setItem('token', data.accessToken);
-        localStorage.setItem('role', 'user');
-        localStorage.setItem('userId', data._id);
-        
-        navigate('/user/dashboard');
-        window.location.reload(); 
+        // 2. Open a new tab with the token in the URL
+        const url = `${window.location.origin}/ghost-access?token=${data.token}`;
+        window.open(url, '_blank');
       } else {
-        alert(data || "Ghost Login Failed!");
+        alert(data.message || "Ghost Login Failed! (Check if backend route exists)");
       }
     } catch (err) {
       console.error(err);
@@ -173,24 +171,27 @@ const Customers = () => {
           {filteredClients.map((client) => (
             <motion.div key={client._id} layout className={`glass-panel p-6 rounded-3xl border ${client.status === 'inactive' ? 'border-red-500/30 opacity-75' : 'border-white/5'} relative group`}>
               
+              {/* 🔥 ACTION BUTTONS */}
               <div className="absolute top-4 right-4 flex gap-2">
-                 {/* Ghost Login Button */}
-                 <button onClick={() => handleGhostLogin(client)} className="p-2 bg-purple-500/20 hover:bg-purple-500/40 rounded-full text-purple-400 hover:text-white" title="Login as User">
+                 <button onClick={() => handleGhostLogin(client)} className="p-2 bg-purple-500/20 hover:bg-purple-500/40 rounded-full text-purple-400 hover:text-white transition" title="Login as this User in New Tab">
                     <LogIn size={16} />
                  </button>
                  
-                 <button onClick={() => toggleStatus(client)} className={`p-2 rounded-full ${client.status === 'active' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}><Power size={16} /></button>
-                 <button onClick={() => openEditModal(client)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white"><Edit size={16} /></button>
-                 <button onClick={() => handleDelete(client._id)} className="p-2 bg-white/5 hover:bg-red-500/20 rounded-full text-slate-400 hover:text-red-500"><Trash2 size={16} /></button>
+                 <button onClick={() => toggleStatus(client)} className={`p-2 rounded-full transition ${client.status === 'active' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}><Power size={16} /></button>
+                 <button onClick={() => openEditModal(client)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition"><Edit size={16} /></button>
+                 <button onClick={() => handleDelete(client._id)} className="p-2 bg-white/5 hover:bg-red-500/20 rounded-full text-slate-400 hover:text-red-500 transition"><Trash2 size={16} /></button>
               </div>
 
               <div className="flex items-center gap-4 mb-6 mt-2">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-xl font-bold text-white">
-                  {client.businessName ? client.businessName.charAt(0) : client.name?.charAt(0)}
+                  {client.businessName ? client.businessName.charAt(0).toUpperCase() : client.name?.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-white">{client.businessName || client.name}</h3>
-                  <span className={`text-[10px] uppercase px-2 py-0.5 rounded ${client.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{client.status}</span>
+                  <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${client.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                      <span className="text-[10px] uppercase text-slate-400">{client.status}</span>
+                  </div>
                 </div>
               </div>
 
@@ -207,12 +208,11 @@ const Customers = () => {
                   </div>
               </div>
 
-              {/* Action Buttons: Config & Inbox */}
               <div className="flex gap-2 mt-4">
-                  <button onClick={() => navigate(`/admin/bot-builder/${client._id}`)} className="flex-1 py-3 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2">
+                  <button onClick={() => navigate(`/admin/bot-builder/${client._id}`)} className="flex-1 py-3 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition">
                     <MessageSquare size={16} /> Config Bot
                   </button>
-                  <button onClick={() => navigate(`/admin/inbox/${client._id}`)} className="px-4 py-3 bg-[#1e293b] hover:bg-slate-700 border border-white/10 text-white font-bold rounded-xl flex items-center justify-center" title="View Inbox">
+                  <button onClick={() => navigate(`/admin/inbox/${client._id}`)} className="px-4 py-3 bg-[#1e293b] hover:bg-slate-700 border border-white/10 text-white font-bold rounded-xl flex items-center justify-center transition" title="View Inbox">
                     <Mail size={18} />
                   </button>
               </div>
