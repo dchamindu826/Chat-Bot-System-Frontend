@@ -33,32 +33,30 @@ const UserTeam = () => {
 
   useEffect(() => { fetchAgents(); }, []);
 
-  // 2. Handle Agent Click (Calculate Stats)
+  // 🔥 2. Handle Agent Click (UPDATED: Fetch Specific Performance)
   const handleAgentClick = async (agent) => {
       setSelectedAgent(agent);
+      setAgentStats(null); // Clear old stats while loading
+      setAgentChats([]);   // Clear old chats while loading
+
       try {
-          const chatRes = await fetch(`${API_BASE_URL}/api/crm/contacts?agentId=${agent._id}`, { 
+          // 🔥 Old Route Removed. Now calling the new performance route
+          const res = await fetch(`${API_BASE_URL}/api/team/agent-performance/${agent._id}`, { 
               headers: { token: `Bearer ${token}` } 
           });
           
-          if(chatRes.ok) {
-              const chats = await chatRes.json();
-              setAgentChats(chats);
+          if(res.ok) {
+              const data = await res.json();
               
-              // --- CALCULATE STATS ---
-              const totalAssigned = chats.length;
-              const covered = chats.filter(c => c.callStatus === 'Answered').length;
-              
-              let rate = 0;
-              if (totalAssigned > 0) {
-                  rate = ((covered / totalAssigned) * 100).toFixed(1);
-              }
-
+              // Map Backend Data to Frontend State
               setAgentStats({
-                  assigned: totalAssigned,
-                  covered: covered,
-                  rate: rate
+                  assigned: data.totalAssigned, // Backend sends 'totalAssigned'
+                  covered: data.covered,        // Backend sends 'covered'
+                  rate: data.successRate        // Backend sends 'successRate'
               });
+
+              // Set Chat History (Backend sends 'recentActivity')
+              setAgentChats(data.recentActivity);
           }
       } catch (err) {
           console.error("Error loading agent details", err);

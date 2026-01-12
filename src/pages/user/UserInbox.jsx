@@ -3,9 +3,20 @@ import MainLayout from '../../layouts/MainLayout';
 import { 
   Search, UserPlus, Send, Paperclip, MoreVertical, 
   CheckSquare, Square, Mic, Image as ImageIcon, 
-  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw
+  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw, Palette, Type, Minus, Plus
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
+
+// --- 🔥 THEME CONFIGURATION ---
+const THEMES = {
+    slate:   { name: 'Clean',   primary: 'bg-slate-500',   hover: 'hover:bg-slate-400',   text: 'text-slate-300',   border: 'border-slate-500',   soft: 'bg-slate-700/30',   ring: 'focus:ring-slate-400', badge: 'bg-white text-black', bubbleMe: 'bg-slate-600', bubbleYou: 'bg-[#1e293b]' },
+    emerald: { name: 'Mint',    primary: 'bg-emerald-500', hover: 'hover:bg-emerald-400', text: 'text-emerald-400', border: 'border-emerald-500/50', soft: 'bg-emerald-500/10', ring: 'focus:ring-emerald-400', badge: 'bg-emerald-500 text-white', bubbleMe: 'bg-emerald-600', bubbleYou: 'bg-[#1e293b]' },
+    indigo:  { name: 'Ocean',   primary: 'bg-indigo-500',  hover: 'hover:bg-indigo-400',  text: 'text-indigo-400',  border: 'border-indigo-500/50',  soft: 'bg-indigo-500/10',  ring: 'focus:ring-indigo-400', badge: 'bg-indigo-500 text-white', bubbleMe: 'bg-indigo-600', bubbleYou: 'bg-[#1e293b]' },
+    rose:    { name: 'Blush',   primary: 'bg-rose-500',    hover: 'hover:bg-rose-400',    text: 'text-rose-400',    border: 'border-rose-500/50',    soft: 'bg-rose-500/10',    ring: 'focus:ring-rose-400', badge: 'bg-rose-500 text-white', bubbleMe: 'bg-rose-600', bubbleYou: 'bg-[#1e293b]' },
+};
+
+// --- FONT SIZES ---
+const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
 
 const UserInbox = ({ isEmbedded = false }) => {
   const [contacts, setContacts] = useState([]);
@@ -14,6 +25,12 @@ const UserInbox = ({ isEmbedded = false }) => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]); 
   
+  // Customization States
+  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('chatTheme') || 'slate');
+  const [fontIndex, setFontIndex] = useState(1); // Default to 'text-sm'
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const theme = THEMES[currentTheme];
+
   const [activeTab, setActiveTab] = useState('Unassigned'); 
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -36,7 +53,21 @@ const UserInbox = ({ isEmbedded = false }) => {
   const CLOUD_NAME = "dyixoaldi"; 
   const UPLOAD_PRESET = "Chat Bot System"; 
 
-  // --- LOAD DATA ---
+  // --- ACTIONS ---
+  const handleThemeChange = (colorKey) => {
+      setCurrentTheme(colorKey);
+      localStorage.setItem('chatTheme', colorKey);
+      setShowThemePicker(false);
+  };
+
+  const adjustFontSize = (dir) => {
+      setFontIndex(prev => {
+          if (dir === 'up') return Math.min(prev + 1, FONT_SIZES.length - 1);
+          if (dir === 'down') return Math.max(prev - 1, 0);
+          return prev;
+      });
+  };
+
   const loadData = async () => {
     try {
         const [conRes, agentRes] = await Promise.all([
@@ -60,47 +91,21 @@ const UserInbox = ({ isEmbedded = false }) => {
       return () => clearInterval(interval);
   }, []);
 
-  // --- 🔥 FIX: Correct URL for fetching messages ---
   useEffect(() => {
     if(selectedContact) {
-        // OLD (Wrong): /api/crm/messages/...
-        // NEW (Correct): /api/messages/...
         fetch(`${API_BASE_URL}/api/messages/${selectedContact._id}`, { headers: { token: `Bearer ${token}` } })
-            .then(res => {
-                if (!res.ok) throw new Error("Failed to load messages");
-                return res.json();
-            })
+            .then(res => res.json())
             .then(data => { if(Array.isArray(data)) setMessages(data); })
-            .catch(err => console.error("Message Load Error:", err));
+            .catch(err => console.error(err));
+        
+        // Reset Unread Count Locally (Visual only)
+        setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, unreadCount: 0 } : c));
     }
   }, [selectedContact]);
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, mediaPreview]);
 
-  // --- ACTIONS ---
-  const handleBulkAssign = async (agentId) => {
-    if(selectedIds.length === 0) return alert("Select leads first!");
-    const selectedAgent = agents.find(a => a._id === agentId);
-    if(!selectedAgent) return;
-    
-    if(!window.confirm(`Assign ${selectedIds.length} leads to ${selectedAgent.name}?`)) return;
-
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/team/assign-chats`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
-            body: JSON.stringify({ contactIds: selectedIds, agentId })
-        });
-
-        if(res.ok) {
-            setContacts(prev => prev.map(c => selectedIds.includes(c._id) ? { ...c, assignedTo: selectedAgent } : c));
-            alert("Assigned Successfully!");
-            setSelectedIds([]);
-            setShowAssignModal(false);
-        }
-    } catch(err) { alert("Error assigning chats"); }
-  };
-
+  // --- SENDING LOGIC ---
   const handleSendMessage = async () => {
       if(!selectedContact) return;
       const textToSend = newMessage.trim();
@@ -111,7 +116,6 @@ const UserInbox = ({ isEmbedded = false }) => {
 
       setSending(true);
       try {
-          // Payload eka hariyata hadamu
           const payload = {
             contactId: selectedContact._id,
             to: selectedContact.phoneNumber,
@@ -120,7 +124,6 @@ const UserInbox = ({ isEmbedded = false }) => {
             mediaUrl: mediaToSend
           };
 
-          // 🔥 FIX: Correct URL for sending
           const res = await fetch(`${API_BASE_URL}/api/messages/send`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
@@ -132,12 +135,10 @@ const UserInbox = ({ isEmbedded = false }) => {
               setMessages(prev => [...prev, sentMsg]);
               setNewMessage("");
               setMediaPreview(null);
-          } else {
-             const errData = await res.json();
-             console.error("Backend Error:", errData);
-             alert("Message Failed! Check Console for error.");
+              // Update sorting
+              setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
           }
-      } catch(err) { console.error("Network Error:", err); } 
+      } catch(err) { alert("Message Failed!"); } 
       finally { setSending(false); }
   };
 
@@ -198,19 +199,34 @@ const UserInbox = ({ isEmbedded = false }) => {
   const cancelRecording = () => { if(mediaRecorder) { mediaRecorder.stop(); setMediaRecorder(null); setIsRecording(false); setRecordingTime(0); clearInterval(timerRef.current); setMediaPreview(null); } };
   const formatTime = (seconds) => { const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins}:${secs < 10 ? '0' : ''}${secs}`; };
 
-  // --- FILTER LOGIC ---
-  const filteredContacts = contacts.filter(c => {
+  const handleBulkAssign = async (agentId) => {
+    if(selectedIds.length === 0) return alert("Select leads!");
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/team/assign-chats`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
+            body: JSON.stringify({ contactIds: selectedIds, agentId })
+        });
+        if(res.ok) {
+            setContacts(prev => prev.map(c => selectedIds.includes(c._id) ? { ...c, assignedTo: agents.find(a => a._id === agentId) } : c));
+            setSelectedIds([]); setShowAssignModal(false); alert("Assigned!");
+        }
+    } catch(err) { alert("Error"); }
+  };
+
+  const filteredContacts = contacts
+    .filter(c => {
       const matchesSearch = c.phoneNumber.includes(searchTerm);
       if(userRole === 'agent') {
           if (!c.assignedTo) return false;
           const assignedId = typeof c.assignedTo === 'object' ? c.assignedTo._id : c.assignedTo;
           return assignedId === currentUserId && matchesSearch;
       }
-      if (activeTab === 'Unassigned') return !c.assignedTo && matchesSearch;
-      if (activeTab === 'Assigned') return c.assignedTo && matchesSearch;
-      return matchesSearch; 
-  });
+      return (activeTab === 'All' ? true : activeTab === 'Unassigned' ? !c.assignedTo : c.assignedTo) && matchesSearch;
+    })
+    .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
 
+  // --- 🔥 OPTIMIZED MESSAGE RENDERER ---
   const renderMessageContent = (msg) => {
     const mediaUrl = msg.mediaUrl || (msg.type !== 'text' ? msg.content : null);
     const hasMedia = !!mediaUrl;
@@ -219,63 +235,109 @@ const UserInbox = ({ isEmbedded = false }) => {
     return (
         <div className="flex flex-col">
             {hasMedia && (
-                <div className={`mb-1 ${isCaption ? 'pb-1' : ''}`}>
-                    {msg.type === 'image' && <div className="rounded-lg overflow-hidden relative group"><img src={mediaUrl} className="w-full h-auto object-cover max-h-[300px] rounded-lg" alt="attachment" /><a href={mediaUrl} target="_blank" rel="noreferrer" className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition"><ExternalLink size={14}/></a></div>}
-                    {msg.type === 'video' && <video controls src={mediaUrl} className="rounded-lg w-full max-h-[300px]" />}
-                    {msg.type === 'audio' && <div className="flex items-center gap-3 bg-black/20 p-3 rounded-xl min-w-[240px]"><div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center text-white shrink-0"><Play size={18} fill="currentColor"/></div><div className="flex-1"><audio controls src={mediaUrl} className="w-full h-8" /></div></div>}
-                    {(msg.type === 'document' || msg.type === 'application/pdf') && <a href={mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-white/10 p-3 rounded-xl hover:bg-white/20 transition group border border-white/5"><div className="w-10 h-10 bg-red-500/20 text-red-400 rounded-lg flex items-center justify-center shrink-0"><FileText size={24}/></div><div className="overflow-hidden flex-1"><p className="text-sm font-bold truncate text-white">Document File</p><p className="text-xs text-slate-400 uppercase">{mediaUrl.split('.').pop()} File</p></div><div className="bg-white/10 p-2 rounded-full text-slate-300 group-hover:bg-white/20 transition"><Download size={16}/></div></a>}
+                <div className={`mb-2 rounded-lg overflow-hidden ${isCaption ? 'border-b border-white/10 pb-2' : ''}`}>
+                    {msg.type === 'image' && (
+                        <div className="relative group cursor-pointer" onClick={() => window.open(mediaUrl, '_blank')}>
+                            <img src={mediaUrl} className="w-full h-auto max-h-[350px] object-cover rounded-lg hover:scale-[1.02] transition-transform" alt="sent content" />
+                        </div>
+                    )}
+                    {msg.type === 'video' && <video controls src={mediaUrl} className="w-full max-h-[350px] rounded-lg bg-black" />}
+                    {msg.type === 'audio' && (
+                        <div className="flex items-center gap-3 bg-black/30 p-3 rounded-xl border border-white/10 min-w-[250px]">
+                            <div className={`w-10 h-10 ${theme.primary} rounded-full flex items-center justify-center text-white shrink-0 shadow-lg`}><Play size={18} fill="currentColor"/></div>
+                            <div className="flex-1"><audio controls src={mediaUrl} className="w-full h-8 opacity-80" /></div>
+                        </div>
+                    )}
+                    {(msg.type === 'document' || msg.type === 'application/pdf') && (
+                        <a href={mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-4 bg-white/10 p-4 rounded-xl hover:bg-white/20 transition group border border-white/5">
+                            <div className="w-10 h-10 bg-red-500/20 text-red-400 rounded-lg flex items-center justify-center shrink-0"><FileText size={24}/></div>
+                            <div className="overflow-hidden flex-1">
+                                <p className="text-sm font-bold truncate text-white">Attached Document</p>
+                                <p className="text-[10px] text-slate-400 uppercase tracking-wider">Click to Open</p>
+                            </div>
+                            <div className="bg-white/10 p-2 rounded-full text-slate-300 group-hover:bg-white/20 transition"><Download size={16}/></div>
+                        </a>
+                    )}
                 </div>
             )}
-            {isCaption && <p className={`whitespace-pre-line text-[15px] leading-relaxed text-white/90 ${hasMedia ? 'mt-1' : ''}`}>{msg.text}</p>}
-            {!hasMedia && !isCaption && <p className="whitespace-pre-line text-[15px] leading-relaxed text-white/90">{msg.text || msg.content}</p>}
+            
+            {/* Logic to handle text or text acting as caption */}
+            {(isCaption || (!hasMedia && msg.text)) && (
+                <p className={`whitespace-pre-line leading-relaxed ${FONT_SIZES[fontIndex]}`}>
+                    {msg.text || msg.content}
+                </p>
+            )}
         </div>
     );
   };
 
-  // --- CONTENT ---
   const content = (
       <div className="flex h-full bg-[#0B1120] rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative">
+        {/* --- LEFT SIDEBAR --- */}
         <div className="w-[380px] border-r border-white/5 flex flex-col bg-[#0f172a]/80 backdrop-blur-xl">
             <div className="p-4 border-b border-white/5 space-y-4">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                        <MessageSquare className="text-indigo-500"/> Inbox
+                    <h2 className={`text-xl font-bold text-white tracking-tight flex items-center gap-2`}>
+                        <MessageSquare className={theme.text}/> Inbox
                     </h2>
-                    <button onClick={loadData} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition"><RefreshCw size={14} className="text-slate-400"/></button>
+                    <div className="flex gap-2">
+                        {/* Theme Toggle */}
+                        <div className="relative">
+                            <button onClick={() => setShowThemePicker(!showThemePicker)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white"><Palette size={16}/></button>
+                            {showThemePicker && (
+                                <div className="absolute top-10 right-0 bg-[#1e293b] border border-white/10 rounded-xl p-2 z-50 shadow-xl flex flex-col gap-1 w-32 animate-in fade-in zoom-in-95">
+                                    {Object.keys(THEMES).map((key) => (
+                                        <button key={key} onClick={() => handleThemeChange(key)} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-bold transition ${currentTheme === key ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                                            <div className={`w-3 h-3 rounded-full ${THEMES[key].primary}`}></div> {THEMES[key].name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={loadData} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white"><RefreshCw size={16}/></button>
+                    </div>
                 </div>
                 {userRole !== 'agent' && (
                     <div className="flex p-1 bg-[#1e293b] rounded-xl border border-white/5">
                         {['Unassigned', 'Assigned', 'All'].map(tab => (
-                            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>{tab}</button>
+                            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>{tab}</button>
                         ))}
                     </div>
                 )}
                 <div className="relative group">
-                    <Search className="absolute left-3 top-2.5 text-slate-500 group-focus-within:text-indigo-500 transition-colors" size={16}/>
-                    <input type="text" placeholder="Search number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#1e293b] rounded-xl py-2 pl-9 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500/50 border border-transparent transition-all placeholder-slate-600"/>
+                    <Search className={`absolute left-3 top-2.5 text-slate-500 group-focus-within:${theme.text} transition-colors`} size={16}/>
+                    <input type="text" placeholder="Search number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full bg-[#1e293b] rounded-xl py-2 pl-9 pr-4 text-sm text-white focus:outline-none focus:ring-1 ${theme.ring} border border-transparent transition-all placeholder-slate-600`}/>
                 </div>
             </div>
             
             {selectedIds.length > 0 && (
-                <div className="bg-indigo-600/10 border-b border-indigo-500/20 p-2 flex justify-between items-center animate-in slide-in-from-top-2">
-                    <span className="text-indigo-400 text-xs font-bold ml-2">{selectedIds.length} Selected</span>
+                <div className={`${theme.soft} border-b ${theme.border} border-opacity-30 p-2 flex justify-between items-center animate-in slide-in-from-top-2`}>
+                    <span className={`${theme.text} text-xs font-bold ml-2`}>{selectedIds.length} Selected</span>
                     <div className="flex gap-2">
                         <button onClick={() => setSelectedIds([])} className="p-1.5 hover:bg-white/10 rounded-lg text-slate-400"><X size={14}/></button>
-                        <button onClick={() => setShowAssignModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-indigo-600/20">Assign <UserPlus size={12}/></button>
+                        <button onClick={() => setShowAssignModal(true)} className={`${theme.primary} ${theme.hover} text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-2 transition shadow-lg`}>Assign <UserPlus size={12}/></button>
                     </div>
                 </div>
             )}
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
                 {filteredContacts.map(contact => (
-                    <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? 'bg-indigo-600/10 border-indigo-500/40 shadow-inner' : 'bg-transparent border-transparent hover:bg-white/5'}`}>
+                    <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? `${theme.soft} ${theme.border} border-opacity-40 shadow-inner` : 'bg-transparent border-transparent hover:bg-white/5'}`}>
                         {userRole !== 'agent' && (
-                            <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(contact._id) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(contact._id) ? setSelectedIds(selectedIds.filter(id => id !== contact._id)) : setSelectedIds([...selectedIds, contact._id]) }}>{selectedIds.includes(contact._id) ? <CheckSquare className="text-indigo-500 bg-[#0f172a] rounded" size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
+                            <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(contact._id) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(contact._id) ? setSelectedIds(selectedIds.filter(id => id !== contact._id)) : setSelectedIds([...selectedIds, contact._id]) }}>{selectedIds.includes(contact._id) ? <CheckSquare className={`${theme.text} bg-[#0f172a] rounded`} size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
                         )}
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${contact.assignedTo ? 'bg-gradient-to-br from-indigo-600 to-violet-600' : 'bg-gradient-to-br from-slate-600 to-slate-700'}`}>{contact.phoneNumber.slice(-2)}</div>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${contact.assignedTo ? theme.primary : 'bg-slate-700'}`}>{contact.phoneNumber.slice(-2)}</div>
                         <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start mb-0.5">
-                                <h4 className={`font-bold text-sm truncate ${selectedContact?._id === contact._id ? 'text-white' : 'text-slate-300'}`}>{contact.phoneNumber}</h4>
+                            {/* 🔥 HEADER WITH UNREAD BADGE */}
+                            <div className="flex justify-between items-center mb-0.5">
+                                <div className="flex items-center gap-2">
+                                    <h4 className={`font-bold text-sm truncate ${selectedContact?._id === contact._id ? 'text-white' : 'text-slate-300'}`}>{contact.phoneNumber}</h4>
+                                    {(contact.unreadCount > 0) && (
+                                        <span className={`h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold shadow-sm animate-pulse`}>
+                                            {contact.unreadCount}
+                                        </span>
+                                    )}
+                                </div>
                                 <span className="text-[10px] text-slate-600 font-medium">{new Date(contact.lastMessageTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                             </div>
                             <p className="text-xs text-slate-500 truncate mb-1">{contact.lastMessage || "New Lead"}</p>
@@ -291,12 +353,13 @@ const UserInbox = ({ isEmbedded = false }) => {
             </div>
         </div>
 
+        {/* --- RIGHT SIDE: CHAT AREA --- */}
         <div className="flex-1 flex flex-col bg-[#0b1221] relative">
             {selectedContact ? (
                 <>
                     <div className="h-16 bg-[#0f172a]/90 backdrop-blur-md flex items-center justify-between px-6 border-b border-white/5 z-20 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">{selectedContact.phoneNumber.slice(-2)}</div>
+                            <div className={`w-9 h-9 rounded-lg ${theme.primary} flex items-center justify-center font-bold text-white shadow-lg`}>{selectedContact.phoneNumber.slice(-2)}</div>
                             <div>
                                 <h3 className="text-white font-bold text-base">{selectedContact.phoneNumber}</h3>
                                 <div className="flex items-center gap-2 text-xs">
@@ -305,14 +368,20 @@ const UserInbox = ({ isEmbedded = false }) => {
                                 </div>
                             </div>
                         </div>
+                        {/* 🔥 FONT SIZE CONTROLLER */}
+                        <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5">
+                            <button onClick={() => adjustFontSize('down')} className="p-1.5 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition"><Minus size={14}/></button>
+                            <Type size={14} className="text-slate-400"/>
+                            <button onClick={() => adjustFontSize('up')} className="p-1.5 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition"><Plus size={14}/></button>
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-[#0b1221] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/10 via-[#0b1221] to-[#0b1221]">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-[#0b1221]">
                         {messages.map((msg, index) => (
                             <div key={index} className={`flex ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[70%] p-3.5 rounded-2xl text-sm shadow-xl backdrop-blur-sm border ${msg.direction === 'outbound' || msg.sender === 'me' ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-500/50' : 'bg-[#1e293b]/90 text-slate-200 rounded-tl-none border-white/5'}`}>
+                                <div className={`max-w-[75%] p-4 rounded-2xl shadow-xl backdrop-blur-sm border ${msg.direction === 'outbound' || msg.sender === 'me' ? `${theme.bubbleMe} text-white rounded-tr-none border-white/10` : `${theme.bubbleYou} text-slate-200 rounded-tl-none border-white/5`}`}>
                                     {renderMessageContent(msg)}
-                                    <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] ${msg.direction === 'outbound' || msg.sender === 'me' ? 'text-indigo-200' : 'text-slate-500'}`}>{new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} {(msg.direction === 'outbound' || msg.sender === 'me') && <CheckCheck size={12}/>}</div>
+                                    <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] ${msg.direction === 'outbound' || msg.sender === 'me' ? 'text-white/70' : 'text-slate-500'}`}>{new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} {(msg.direction === 'outbound' || msg.sender === 'me') && <CheckCheck size={12}/>}</div>
                                 </div>
                             </div>
                         ))}
@@ -320,7 +389,7 @@ const UserInbox = ({ isEmbedded = false }) => {
                     </div>
 
                     <div className="p-4 bg-[#0B1120] border-t border-white/5">
-                        <div className="bg-[#1e293b]/50 rounded-2xl flex flex-col border border-white/5 focus-within:border-indigo-500/50 transition-colors shadow-lg relative overflow-hidden backdrop-blur-sm">
+                        <div className={`bg-[#1e293b]/50 rounded-2xl flex flex-col border border-white/5 focus-within:${theme.border} transition-colors shadow-lg relative overflow-hidden backdrop-blur-sm`}>
                             {mediaPreview && (
                                 <div className="p-3 bg-black/40 border-b border-white/5 flex items-center justify-between animate-in slide-in-from-bottom-2">
                                     <div className="flex items-center gap-3">
@@ -330,7 +399,7 @@ const UserInbox = ({ isEmbedded = false }) => {
                                             {mediaPreview.type === 'audio' && <Mic size={20} className="text-white"/>}
                                             {mediaPreview.type === 'document' && <FileText size={20} className="text-white"/>}
                                         </div>
-                                        <div><p className="text-white text-sm font-bold truncate w-48">{mediaPreview.name}</p><p className="text-xs text-indigo-400 uppercase font-bold">{mediaPreview.type}</p></div>
+                                        <div><p className="text-white text-sm font-bold truncate w-48">{mediaPreview.name}</p><p className={`text-xs ${theme.text} uppercase font-bold`}>{mediaPreview.type}</p></div>
                                     </div>
                                     <button onClick={() => setMediaPreview(null)} className="p-2 bg-white/10 hover:bg-red-500 hover:text-white rounded-full transition text-slate-400"><X size={16}/></button>
                                 </div>
@@ -348,23 +417,24 @@ const UserInbox = ({ isEmbedded = false }) => {
                                     <>
                                         <label className="p-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition cursor-pointer self-center" title="Attach File"><Paperclip size={20}/><input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*,application/pdf,application/msword,audio/*"/></label>
                                         <textarea placeholder={mediaPreview ? "Add a caption..." : "Type a message..."} className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-slate-500 px-2 py-3 resize-none custom-scrollbar max-h-32" rows={1} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} disabled={uploading}/>
-                                        {newMessage.trim() || mediaPreview ? (<button onClick={handleSendMessage} disabled={sending} className="p-3 bg-indigo-600 rounded-xl text-white hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/30 self-center">{sending ? <Loader className="animate-spin" size={20}/> : <Send size={20}/>}</button>) : (<button onClick={startRecording} className="p-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition self-center"><Mic size={20} /></button>)}
+                                        {newMessage.trim() || mediaPreview ? (<button onClick={handleSendMessage} disabled={sending} className={`p-3 ${theme.primary} rounded-xl text-white ${theme.hover} transition shadow-lg self-center`}>{sending ? <Loader className="animate-spin" size={20}/> : <Send size={20}/>}</button>) : (<button onClick={startRecording} className="p-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition self-center"><Mic size={20} /></button>)}
                                     </>
                                 )}
                             </div>
-                            {uploading && <div className="absolute inset-0 bg-[#1e293b]/90 flex items-center justify-center gap-2 z-10 backdrop-blur-sm"><Loader className="animate-spin text-indigo-500" size={20}/><span className="text-xs text-indigo-400 font-bold">Uploading Media...</span></div>}
+                            {uploading && <div className="absolute inset-0 bg-[#1e293b]/90 flex items-center justify-center gap-2 z-10 backdrop-blur-sm"><Loader className={`animate-spin ${theme.text}`} size={20}/><span className={`text-xs ${theme.text} font-bold`}>Uploading Media...</span></div>}
                         </div>
                     </div>
                 </>
             ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-500 bg-[#0b1221]">
-                    <div className="w-24 h-24 bg-[#1e293b]/50 rounded-full flex items-center justify-center mb-6 shadow-2xl shadow-indigo-500/10 border border-white/5 animate-pulse"><MessageSquare size={40} className="text-indigo-500 opacity-80"/></div>
+                    <div className="w-24 h-24 bg-[#1e293b]/50 rounded-full flex items-center justify-center mb-6 shadow-2xl shadow-indigo-500/10 border border-white/5 animate-pulse"><MessageSquare size={40} className={`${theme.text} opacity-80`}/></div>
                     <h1 className="text-2xl font-bold text-white mb-2">Select a Conversation</h1>
                     <p className="text-slate-500 text-sm">Choose a contact from the left to start chatting.</p>
                 </div>
             )}
         </div>
 
+        {/* --- ASSIGN MODAL --- */}
         {showAssignModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="bg-[#0f172a] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
@@ -374,9 +444,9 @@ const UserInbox = ({ isEmbedded = false }) => {
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
                         {agents.length === 0 ? <div className="text-center p-8 text-slate-500"><Users size={40} className="mx-auto mb-3 opacity-50"/><p>No agents available.</p></div> : agents.map(agent => (
-                            <div key={agent._id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-indigo-600/10 hover:border-indigo-500/30 transition group">
+                            <div key={agent._id} className={`flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:${theme.soft} hover:${theme.border} transition group`}>
                                 <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{agent.name.charAt(0).toUpperCase()}</div><div><h4 className="text-white font-bold text-sm">{agent.name}</h4><p className="text-[10px] text-slate-400">{agent.email}</p></div></div>
-                                <button onClick={() => handleBulkAssign(agent._id)} className="px-3 py-1.5 bg-white/5 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-2">Assign <ChevronRight size={14}/></button>
+                                <button onClick={() => handleBulkAssign(agent._id)} className={`px-3 py-1.5 bg-white/5 hover:${theme.primary} text-slate-300 hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-2`}>Assign <ChevronRight size={14}/></button>
                             </div>
                         ))}
                     </div>
