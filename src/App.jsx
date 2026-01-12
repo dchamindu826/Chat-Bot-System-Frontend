@@ -43,6 +43,9 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           
+          {/* 🔥 FIXED: Ghost Access moved here (Root Level) */}
+          <Route path="/ghost-access" element={<GhostAccess />} />
+          
           {/* --- ADMIN ROUTES --- */}
           <Route path="/admin/*" element={
             <ProtectedRoute allowedRole="admin">
@@ -57,7 +60,6 @@ function App() {
                   <Route path="inbox/:clientId" element={<Inbox />} />
                   <Route path="analytics" element={<Analytics />} />
                   <Route path="settings" element={<Settings />} />
-                  <Route path="/ghost-access" element={<GhostAccess />} />
                </Routes>
             </ProtectedRoute>
           } />
