@@ -2,7 +2,8 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Bot, Settings, LogOut, 
-  MessageSquare, Box, ShieldAlert, Zap, Bell, Search, User 
+  MessageSquare, Box, ShieldAlert, Zap, Bell, Search, User,
+  LayoutTemplate // 🔥 Broadcast Icon Removed
 } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
@@ -25,12 +26,15 @@ const MainLayout = ({ children }) => {
     { name: 'Settings', path: '/admin/settings', icon: Settings },
   ];
 
-  // ✅ "Team" Button එක එකතු කළා
+  // 🔥 USER MENU UPDATED (Broadcast Removed)
   const userMenu = [
     { name: 'Overview', path: '/user/dashboard', icon: LayoutDashboard },
-    { name: 'Inbox (CRM)', path: '/user/inbox', icon: MessageSquare }, // නම පොඩ්ඩක් වෙනස් කළා
-    { name: 'My Team', path: '/user/team', icon: Users }, // <--- New Team Button
+    { name: 'Inbox (CRM)', path: '/user/inbox', icon: MessageSquare },
+    { name: 'My Team', path: '/user/team', icon: Users },
     { name: 'My Bot', path: '/user/my-bot', icon: Bot },
+    
+    { name: 'Templates', path: '/user/templates', icon: LayoutTemplate }, // ✅ Templates Only
+    
     { name: 'Tools', path: '/user/tools', icon: Box },
     { name: 'Settings', path: '/user/settings', icon: Settings },
   ];

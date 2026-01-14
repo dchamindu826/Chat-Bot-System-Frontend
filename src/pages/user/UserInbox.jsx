@@ -3,19 +3,18 @@ import MainLayout from '../../layouts/MainLayout';
 import { 
   Search, UserPlus, Send, Paperclip, MoreVertical, 
   CheckSquare, Square, Mic, Image as ImageIcon, 
-  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw, Palette, Type, Minus, Plus
+  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw, Palette, Type, Minus, Plus, Zap 
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 // --- 🔥 THEME CONFIGURATION ---
 const THEMES = {
-    slate:   { name: 'Clean',   primary: 'bg-slate-500',   hover: 'hover:bg-slate-400',   text: 'text-slate-300',   border: 'border-slate-500',   soft: 'bg-slate-700/30',   ring: 'focus:ring-slate-400', badge: 'bg-white text-black', bubbleMe: 'bg-slate-600', bubbleYou: 'bg-[#1e293b]' },
-    emerald: { name: 'Mint',    primary: 'bg-emerald-500', hover: 'hover:bg-emerald-400', text: 'text-emerald-400', border: 'border-emerald-500/50', soft: 'bg-emerald-500/10', ring: 'focus:ring-emerald-400', badge: 'bg-emerald-500 text-white', bubbleMe: 'bg-emerald-600', bubbleYou: 'bg-[#1e293b]' },
-    indigo:  { name: 'Ocean',   primary: 'bg-indigo-500',  hover: 'hover:bg-indigo-400',  text: 'text-indigo-400',  border: 'border-indigo-500/50',  soft: 'bg-indigo-500/10',  ring: 'focus:ring-indigo-400', badge: 'bg-indigo-500 text-white', bubbleMe: 'bg-indigo-600', bubbleYou: 'bg-[#1e293b]' },
-    rose:    { name: 'Blush',   primary: 'bg-rose-500',    hover: 'hover:bg-rose-400',    text: 'text-rose-400',    border: 'border-rose-500/50',    soft: 'bg-rose-500/10',    ring: 'focus:ring-rose-400', badge: 'bg-rose-500 text-white', bubbleMe: 'bg-rose-600', bubbleYou: 'bg-[#1e293b]' },
+  slate:   { name: 'Clean',   primary: 'bg-slate-500',   hover: 'hover:bg-slate-400',   text: 'text-slate-300',   border: 'border-slate-500',   soft: 'bg-slate-700/30',   ring: 'focus:ring-slate-400', badge: 'bg-white text-black', bubbleMe: 'bg-slate-600', bubbleYou: 'bg-[#1e293b]' },
+  emerald: { name: 'Mint',    primary: 'bg-emerald-500', hover: 'hover:bg-emerald-400', text: 'text-emerald-400', border: 'border-emerald-500/50', soft: 'bg-emerald-500/10', ring: 'focus:ring-emerald-400', badge: 'bg-emerald-500 text-white', bubbleMe: 'bg-emerald-600', bubbleYou: 'bg-[#1e293b]' },
+  indigo:  { name: 'Ocean',   primary: 'bg-indigo-500',  hover: 'hover:bg-indigo-400',  text: 'text-indigo-400',  border: 'border-indigo-500/50',  soft: 'bg-indigo-500/10',  ring: 'focus:ring-indigo-400', badge: 'bg-indigo-500 text-white', bubbleMe: 'bg-indigo-600', bubbleYou: 'bg-[#1e293b]' },
+  rose:    { name: 'Blush',   primary: 'bg-rose-500',    hover: 'hover:bg-rose-400',    text: 'text-rose-400',    border: 'border-rose-500/50',    soft: 'bg-rose-500/10',    ring: 'focus:ring-rose-400', badge: 'bg-rose-500 text-white', bubbleMe: 'bg-rose-600', bubbleYou: 'bg-[#1e293b]' },
 };
 
-// --- FONT SIZES ---
 const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
 
 const UserInbox = ({ isEmbedded = false }) => {
@@ -27,7 +26,7 @@ const UserInbox = ({ isEmbedded = false }) => {
   
   // Customization States
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('chatTheme') || 'slate');
-  const [fontIndex, setFontIndex] = useState(1); // Default to 'text-sm'
+  const [fontIndex, setFontIndex] = useState(1);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const theme = THEMES[currentTheme];
 
@@ -46,6 +45,7 @@ const UserInbox = ({ isEmbedded = false }) => {
   const scrollRef = useRef(); 
 
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignAmount, setAssignAmount] = useState(10); // 🔥 NEW: Bulk Assign Amount
 
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role'); 
@@ -97,8 +97,6 @@ const UserInbox = ({ isEmbedded = false }) => {
             .then(res => res.json())
             .then(data => { if(Array.isArray(data)) setMessages(data); })
             .catch(err => console.error(err));
-        
-        // Reset Unread Count Locally (Visual only)
         setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, unreadCount: 0 } : c));
     }
   }, [selectedContact]);
@@ -135,7 +133,6 @@ const UserInbox = ({ isEmbedded = false }) => {
               setMessages(prev => [...prev, sentMsg]);
               setNewMessage("");
               setMediaPreview(null);
-              // Update sorting
               setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
           }
       } catch(err) { alert("Message Failed!"); } 
@@ -199,19 +196,36 @@ const UserInbox = ({ isEmbedded = false }) => {
   const cancelRecording = () => { if(mediaRecorder) { mediaRecorder.stop(); setMediaRecorder(null); setIsRecording(false); setRecordingTime(0); clearInterval(timerRef.current); setMediaPreview(null); } };
   const formatTime = (seconds) => { const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins}:${secs < 10 ? '0' : ''}${secs}`; };
 
-  const handleBulkAssign = async (agentId) => {
-    if(selectedIds.length === 0) return alert("Select leads!");
+  const handleBulkAssign = async (agentId, isQuantityBased = false) => {
+    let leadsToAssign = selectedIds;
+
+    // 🔥 NEW: Logic for "Assign First X Leads"
+    if (isQuantityBased) {
+        const unassignedLeads = contacts
+            .filter(c => !c.assignedTo) // Only Unassigned
+            .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)) // Newest First
+            .slice(0, assignAmount) // Take top X amount
+            .map(c => c._id);
+        
+        if (unassignedLeads.length === 0) return alert("No unassigned leads available!");
+        leadsToAssign = unassignedLeads;
+    } else {
+        if(leadsToAssign.length === 0) return alert("Select leads manually or use the Quantity Assign feature!");
+    }
+
+    if(!window.confirm(`Assign ${leadsToAssign.length} leads to this agent?`)) return;
+
     try {
         const res = await fetch(`${API_BASE_URL}/api/team/assign-chats`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
-            body: JSON.stringify({ contactIds: selectedIds, agentId })
+            body: JSON.stringify({ contactIds: leadsToAssign, agentId })
         });
         if(res.ok) {
-            setContacts(prev => prev.map(c => selectedIds.includes(c._id) ? { ...c, assignedTo: agents.find(a => a._id === agentId) } : c));
-            setSelectedIds([]); setShowAssignModal(false); alert("Assigned!");
+            setContacts(prev => prev.map(c => leadsToAssign.includes(c._id) ? { ...c, assignedTo: agents.find(a => a._id === agentId) } : c));
+            setSelectedIds([]); setShowAssignModal(false); alert(`Successfully assigned ${leadsToAssign.length} leads!`);
         }
-    } catch(err) { alert("Error"); }
+    } catch(err) { alert("Error assigning leads"); }
   };
 
   const filteredContacts = contacts
@@ -226,7 +240,6 @@ const UserInbox = ({ isEmbedded = false }) => {
     })
     .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
 
-  // --- 🔥 OPTIMIZED MESSAGE RENDERER ---
   const renderMessageContent = (msg) => {
     const mediaUrl = msg.mediaUrl || (msg.type !== 'text' ? msg.content : null);
     const hasMedia = !!mediaUrl;
@@ -260,8 +273,6 @@ const UserInbox = ({ isEmbedded = false }) => {
                     )}
                 </div>
             )}
-            
-            {/* Logic to handle text or text acting as caption */}
             {(isCaption || (!hasMedia && msg.text)) && (
                 <p className={`whitespace-pre-line leading-relaxed ${FONT_SIZES[fontIndex]}`}>
                     {msg.text || msg.content}
@@ -281,7 +292,6 @@ const UserInbox = ({ isEmbedded = false }) => {
                         <MessageSquare className={theme.text}/> Inbox
                     </h2>
                     <div className="flex gap-2">
-                        {/* Theme Toggle */}
                         <div className="relative">
                             <button onClick={() => setShowThemePicker(!showThemePicker)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white"><Palette size={16}/></button>
                             {showThemePicker && (
@@ -295,6 +305,12 @@ const UserInbox = ({ isEmbedded = false }) => {
                             )}
                         </div>
                         <button onClick={loadData} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white"><RefreshCw size={16}/></button>
+                        {/* 🔥 Quick Assign Button (Only for Admins/Owners) */}
+                        {userRole !== 'agent' && (
+                             <button onClick={() => setShowAssignModal(true)} className={`p-2 ${theme.soft} hover:${theme.primary} text-white rounded-lg transition`} title="Bulk Assign">
+                                <Zap size={16} />
+                             </button>
+                        )}
                     </div>
                 </div>
                 {userRole !== 'agent' && (
@@ -328,7 +344,6 @@ const UserInbox = ({ isEmbedded = false }) => {
                         )}
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${contact.assignedTo ? theme.primary : 'bg-slate-700'}`}>{contact.phoneNumber.slice(-2)}</div>
                         <div className="flex-1 min-w-0">
-                            {/* 🔥 HEADER WITH UNREAD BADGE */}
                             <div className="flex justify-between items-center mb-0.5">
                                 <div className="flex items-center gap-2">
                                     <h4 className={`font-bold text-sm truncate ${selectedContact?._id === contact._id ? 'text-white' : 'text-slate-300'}`}>{contact.phoneNumber}</h4>
@@ -368,7 +383,6 @@ const UserInbox = ({ isEmbedded = false }) => {
                                 </div>
                             </div>
                         </div>
-                        {/* 🔥 FONT SIZE CONTROLLER */}
                         <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/5">
                             <button onClick={() => adjustFontSize('down')} className="p-1.5 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition"><Minus size={14}/></button>
                             <Type size={14} className="text-slate-400"/>
@@ -434,21 +448,43 @@ const UserInbox = ({ isEmbedded = false }) => {
             )}
         </div>
 
-        {/* --- ASSIGN MODAL --- */}
+        {/* --- ASSIGN MODAL (UPDATED) --- */}
         {showAssignModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-                <div className="bg-[#0f172a] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="bg-[#0f172a] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                     <div className="p-5 border-b border-white/10 flex justify-between items-center bg-[#1e293b]">
-                        <div><h3 className="text-lg font-bold text-white">Select Agent</h3><p className="text-xs text-slate-400">Assigning {selectedIds.length} leads</p></div>
+                        <div><h3 className="text-lg font-bold text-white">Assign Leads</h3><p className="text-xs text-slate-400">Distribute leads to your team</p></div>
                         <button onClick={() => setShowAssignModal(false)} className="p-2 hover:bg-white/10 rounded-full text-slate-400 transition"><X size={18}/></button>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
-                        {agents.length === 0 ? <div className="text-center p-8 text-slate-500"><Users size={40} className="mx-auto mb-3 opacity-50"/><p>No agents available.</p></div> : agents.map(agent => (
-                            <div key={agent._id} className={`flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:${theme.soft} hover:${theme.border} transition group`}>
-                                <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{agent.name.charAt(0).toUpperCase()}</div><div><h4 className="text-white font-bold text-sm">{agent.name}</h4><p className="text-[10px] text-slate-400">{agent.email}</p></div></div>
-                                <button onClick={() => handleBulkAssign(agent._id)} className={`px-3 py-1.5 bg-white/5 hover:${theme.primary} text-slate-300 hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-2`}>Assign <ChevronRight size={14}/></button>
+
+                    <div className="p-5 overflow-y-auto custom-scrollbar space-y-6">
+                        {/* 🔥 1. BULK QUANTITY ASSIGN OPTION */}
+                        {selectedIds.length === 0 && (
+                            <div className="bg-[#1e293b]/50 p-4 rounded-xl border border-white/5">
+                                <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2"><Zap size={16} className="text-amber-500"/> Quick Auto-Assign</h4>
+                                <p className="text-xs text-slate-400 mb-3">Automatically pick the newest unassigned leads.</p>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-slate-300">Assign first</span>
+                                    <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(parseInt(e.target.value) || 1)} className="w-16 bg-black/30 border border-white/10 rounded-lg p-2 text-center text-white text-sm focus:outline-none focus:border-amber-500"/>
+                                    <span className="text-xs text-slate-300">leads to:</span>
+                                </div>
                             </div>
-                        ))}
+                        )}
+
+                        {/* 🔥 2. AGENT LIST SELECTION */}
+                        <div>
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Select Agent</h4>
+                            <div className="space-y-2">
+                                {agents.length === 0 ? <div className="text-center p-4 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><Users size={32} className="mx-auto mb-2 opacity-50"/><p className="text-sm">No agents available.</p></div> : agents.map(agent => (
+                                    <div key={agent._id} className={`flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:${theme.soft} hover:${theme.border} transition group`}>
+                                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{agent.name.charAt(0).toUpperCase()}</div><div><h4 className="text-white font-bold text-sm">{agent.name}</h4><p className="text-[10px] text-slate-400">{agent.email}</p></div></div>
+                                        <button onClick={() => handleBulkAssign(agent._id, selectedIds.length === 0)} className={`px-4 py-2 ${selectedIds.length === 0 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500 hover:text-black' : 'bg-white/5 text-slate-300 hover:bg-white/20 hover:text-white'} rounded-lg text-xs font-bold transition flex items-center gap-2`}>
+                                            {selectedIds.length === 0 ? `Auto Assign ${assignAmount}` : 'Assign Selected'} <ChevronRight size={14}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

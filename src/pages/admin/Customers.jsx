@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MessageSquare, Phone, Mail, UserCheck, Plus, X, Loader, Edit, Trash2, Power, Key, LogIn } from 'lucide-react';
+import { Search, MessageSquare, Phone, Mail, UserCheck, Plus, X, Loader, Edit, Trash2, Power, Key, LogIn, Database } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 const Customers = () => {
@@ -16,9 +16,11 @@ const Customers = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [editId, setEditId] = useState(null);
   
+  // 🔥 State Updated: Added wabaId
   const [formData, setFormData] = useState({
     name: '', email: '', password: '', businessName: '', phone: '',
     phoneNumberId: '',
+    wabaId: '', // New Field
     accessToken: ''
   });
 
@@ -37,35 +39,27 @@ const Customers = () => {
 
   useEffect(() => { fetchClients(); }, []);
 
-  // --- 🔥 UPDATED GHOST LOGIN (NEW TAB) ---
+  // Ghost Login
   const handleGhostLogin = async (client) => {
     if(!window.confirm(`⚠️ Warning: You are about to log in as "${client.businessName || client.name}".\n\nA new tab will open for this session.`)) return;
-    
     try {
-      // 1. Request a temporary access token for this user
-      const res = await fetch(`${API_BASE_URL}/api/auth/ghost-login/${client._id}`, { // Make sure this route exists in backend
+      const res = await fetch(`${API_BASE_URL}/api/users/ghost-login/${client._id}`, { 
         method: 'POST',
         headers: { token: `Bearer ${token}` }
       });
-      
       const data = await res.json();
-
       if (res.ok) {
-        // 2. Open a new tab with the token in the URL
-        const url = `${window.location.origin}/ghost-access?token=${data.token}`;
+        const url = `${window.location.origin}/ghost-access?token=${data.accessToken}`;
         window.open(url, '_blank');
       } else {
-        alert(data.message || "Ghost Login Failed! (Check if backend route exists)");
+        alert(data.message || "Ghost Login Failed!");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Network Error during Ghost Login");
-    }
+    } catch (err) { console.error(err); alert("Network Error"); }
   };
 
   const openAddModal = () => {
     setIsEditMode(false);
-    setFormData({ name: '', email: '', password: '', businessName: '', phone: '', phoneNumberId: '', accessToken: '' });
+    setFormData({ name: '', email: '', password: '', businessName: '', phone: '', phoneNumberId: '', wabaId: '', accessToken: '' });
     setShowModal(true);
   };
 
@@ -79,6 +73,7 @@ const Customers = () => {
       businessName: client.businessName || '', 
       phone: client.phone || '',
       phoneNumberId: client.whatsappConfig?.phoneNumberId || '',
+      wabaId: client.whatsappConfig?.wabaId || '', // 🔥 Load WABA ID
       accessToken: client.whatsappConfig?.accessToken || ''
     });
     setShowModal(true);
@@ -101,6 +96,7 @@ const Customers = () => {
       phone: formData.phone,
       whatsappConfig: {
         phoneNumberId: formData.phoneNumberId,
+        wabaId: formData.wabaId, // 🔥 Save WABA ID
         accessToken: formData.accessToken
       }
     };
@@ -171,12 +167,8 @@ const Customers = () => {
           {filteredClients.map((client) => (
             <motion.div key={client._id} layout className={`glass-panel p-6 rounded-3xl border ${client.status === 'inactive' ? 'border-red-500/30 opacity-75' : 'border-white/5'} relative group`}>
               
-              {/* 🔥 ACTION BUTTONS */}
               <div className="absolute top-4 right-4 flex gap-2">
-                 <button onClick={() => handleGhostLogin(client)} className="p-2 bg-purple-500/20 hover:bg-purple-500/40 rounded-full text-purple-400 hover:text-white transition" title="Login as this User in New Tab">
-                    <LogIn size={16} />
-                 </button>
-                 
+                 <button onClick={() => handleGhostLogin(client)} className="p-2 bg-purple-500/20 hover:bg-purple-500/40 rounded-full text-purple-400 hover:text-white transition" title="Ghost Login"><LogIn size={16} /></button>
                  <button onClick={() => toggleStatus(client)} className={`p-2 rounded-full transition ${client.status === 'active' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}><Power size={16} /></button>
                  <button onClick={() => openEditModal(client)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition"><Edit size={16} /></button>
                  <button onClick={() => handleDelete(client._id)} className="p-2 bg-white/5 hover:bg-red-500/20 rounded-full text-slate-400 hover:text-red-500 transition"><Trash2 size={16} /></button>
@@ -200,11 +192,15 @@ const Customers = () => {
                   <div className="flex gap-3"><Mail size={16} className="text-secondary/70"/> {client.email}</div>
                   <div className="flex gap-3 items-center"><Phone size={16} className="text-emerald-500/70"/> <span>{client.phone || "No Phone"}</span></div>
                   
-                  <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2">
-                    <Key size={14} className={client.whatsappConfig?.phoneNumberId ? "text-emerald-400" : "text-slate-600"} />
-                    <span className={client.whatsappConfig?.phoneNumberId ? "text-emerald-400 text-xs" : "text-slate-600 text-xs"}>
-                        {client.whatsappConfig?.phoneNumberId ? "Meta Connected" : "No API Keys"}
-                    </span>
+                  <div className="mt-3 pt-3 border-t border-white/5 flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                        <Key size={14} className={client.whatsappConfig?.phoneNumberId ? "text-emerald-400" : "text-slate-600"} />
+                        <span className="text-xs">{client.whatsappConfig?.phoneNumberId ? "Phone ID Connected" : "No Phone ID"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Database size={14} className={client.whatsappConfig?.wabaId ? "text-blue-400" : "text-slate-600"} />
+                        <span className="text-xs">{client.whatsappConfig?.wabaId ? "WABA ID Connected" : "No WABA ID"}</span>
+                    </div>
                   </div>
               </div>
 
@@ -247,6 +243,12 @@ const Customers = () => {
                       <div>
                         <label className="text-xs text-slate-400 mb-1 block">Phone Number ID</label>
                         <input name="phoneNumberId" value={formData.phoneNumberId} onChange={(e) => setFormData({...formData, phoneNumberId: e.target.value})} className="w-full bg-black/20 border border-emerald-500/20 rounded-xl p-3 text-white font-mono text-sm focus:border-emerald-500" placeholder="e.g. 100609..." />
+                      </div>
+                      {/* 🔥 NEW: WABA ID FIELD */}
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">WhatsApp Business Account ID (WABA ID)</label>
+                        <input name="wabaId" value={formData.wabaId} onChange={(e) => setFormData({...formData, wabaId: e.target.value})} className="w-full bg-black/20 border border-emerald-500/20 rounded-xl p-3 text-white font-mono text-sm focus:border-emerald-500" placeholder="e.g. 200508..." />
+                        <p className="text-[10px] text-slate-500 mt-1">Required for Templates</p>
                       </div>
                       <div>
                         <label className="text-xs text-slate-400 mb-1 block">Permanent Access Token</label>

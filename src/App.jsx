@@ -20,6 +20,8 @@ import UserTools from './pages/user/UserTools';
 import UserSettings from './pages/user/UserSettings';
 import UserTeam from './pages/user/UserTeam';
 import UserAgentDash from './pages/user/UserAgentDash';
+import UserTemplates from './pages/user/UserTemplates';
+
 
 const ProtectedRoute = ({ children, allowedRole }) => {
   const token = localStorage.getItem('token');
@@ -74,7 +76,9 @@ function App() {
                    <Route path="my-bot" element={<UserBotConfig />} />
                    <Route path="tools" element={<UserTools />} />
                    <Route path="agent-dashboard" element={<UserAgentDash />} />
+                   <Route path="templates" element={<UserTemplates />} />
                    <Route path="settings" element={<UserSettings />} />
+                   
                 </Routes>
             </ProtectedRoute>
           } />
