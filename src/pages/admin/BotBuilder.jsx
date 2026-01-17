@@ -6,11 +6,11 @@ import { API_BASE_URL } from '../../config';
 
 const BotBuilder = () => {
   // 1. Get Params Correctly
-  const { userId } = useParams();
+  const { userId } = useParams(); // URL එකෙන් එන ID එක (Admin ගේ පැත්තෙන්)
   const loggedUserRole = localStorage.getItem('role');
   const loggedUserId = localStorage.getItem('userId');
   
-  // Decide Target User ID
+  // Decide Target User ID (Admin නම් URL එකේ ID එක, නැත්නම් Log වුන User ගේ ID එක)
   const targetUserId = loggedUserRole === 'admin' ? userId : loggedUserId;
 
   const [replies, setReplies] = useState([]);
@@ -57,11 +57,13 @@ const BotBuilder = () => {
     
     // Construct Payload
     const bodyData = { 
-        userId: targetUserId, 
-        replies: replies 
+        ownerId: targetUserId, // 🔥 FIX: ownerId එක අනිවාර්යයෙන් යවන්න ඕන (Backend eke bot.js eka balanna meka)
+        userId: targetUserId,  // Backup field
+        replies: replies,
+        isActive: true // Default Active
     };
 
-    console.log("📤 Sending Data:", bodyData); // Check Console for this
+    console.log("📤 Sending Data:", bodyData); 
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/bot-config/save`, {
@@ -170,7 +172,7 @@ const BotBuilder = () => {
   return (
     <MainLayout>
       <div className="h-[calc(100vh-100px)]">
-        {/* DEBUG BAR - මෙය වැඩේ හරි ගියාම මකන්න */}
+        {/* DEBUG BAR - වැඩේ හරි ගියාම මකන්න */}
         <div className="bg-blue-900/50 p-2 text-xs text-blue-200 mb-2 border border-blue-500 rounded flex justify-between">
             <span>TARGET USER ID: <b>{targetUserId || "UNDEFINED ❌"}</b></span>
             <span>ROLE: {loggedUserRole}</span>
