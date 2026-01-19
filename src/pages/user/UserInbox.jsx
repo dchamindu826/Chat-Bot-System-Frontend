@@ -3,7 +3,7 @@ import MainLayout from '../../layouts/MainLayout';
 import { 
   Search, UserPlus, Send, Paperclip, MoreVertical, 
   CheckSquare, Square, Mic, Image as ImageIcon, 
-  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw, Palette, Type, Minus, Plus, Zap 
+  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw, Palette, Type, Minus, Plus, Zap, ArrowUp, ArrowDown 
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
@@ -45,7 +45,8 @@ const UserInbox = ({ isEmbedded = false }) => {
   const scrollRef = useRef(); 
 
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [assignAmount, setAssignAmount] = useState(10); // 🔥 NEW: Bulk Assign Amount
+  const [assignAmount, setAssignAmount] = useState(10); 
+  const [assignDirection, setAssignDirection] = useState('newest'); // 🔥 NEW: 'newest' (Top) or 'oldest' (Bottom)
 
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role'); 
@@ -199,12 +200,21 @@ const UserInbox = ({ isEmbedded = false }) => {
   const handleBulkAssign = async (agentId, isQuantityBased = false) => {
     let leadsToAssign = selectedIds;
 
-    // 🔥 NEW: Logic for "Assign First X Leads"
+    // 🔥 MODIFIED: Logic for Top (Newest) vs Bottom (Oldest)
     if (isQuantityBased) {
-        const unassignedLeads = contacts
-            .filter(c => !c.assignedTo) // Only Unassigned
-            .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)) // Newest First
-            .slice(0, assignAmount) // Take top X amount
+        // Clone contacts to avoid mutating state directly during sort
+        let sortedUnassigned = [...contacts].filter(c => !c.assignedTo);
+
+        if (assignDirection === 'newest') {
+            // Sort Descending (Newest First) -> Top of list
+            sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+        } else {
+            // Sort Ascending (Oldest First) -> Bottom of list
+            sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime));
+        }
+
+        const unassignedLeads = sortedUnassigned
+            .slice(0, assignAmount) // Take top X amount from the sorted list
             .map(c => c._id);
         
         if (unassignedLeads.length === 0) return alert("No unassigned leads available!");
@@ -213,7 +223,7 @@ const UserInbox = ({ isEmbedded = false }) => {
         if(leadsToAssign.length === 0) return alert("Select leads manually or use the Quantity Assign feature!");
     }
 
-    if(!window.confirm(`Assign ${leadsToAssign.length} leads to this agent?`)) return;
+    if(!window.confirm(`Assign ${leadsToAssign.length} leads (${isQuantityBased ? assignDirection + ' ones' : 'selected'}) to this agent?`)) return;
 
     try {
         const res = await fetch(`${API_BASE_URL}/api/team/assign-chats`, {
@@ -448,7 +458,7 @@ const UserInbox = ({ isEmbedded = false }) => {
             )}
         </div>
 
-        {/* --- ASSIGN MODAL (UPDATED) --- */}
+        {/* --- ASSIGN MODAL (UPDATED WITH TOGGLE) --- */}
         {showAssignModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="bg-[#0f172a] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
@@ -461,12 +471,22 @@ const UserInbox = ({ isEmbedded = false }) => {
                         {/* 🔥 1. BULK QUANTITY ASSIGN OPTION */}
                         {selectedIds.length === 0 && (
                             <div className="bg-[#1e293b]/50 p-4 rounded-xl border border-white/5">
-                                <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2"><Zap size={16} className="text-amber-500"/> Quick Auto-Assign</h4>
-                                <p className="text-xs text-slate-400 mb-3">Automatically pick the newest unassigned leads.</p>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs text-slate-300">Assign first</span>
-                                    <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(parseInt(e.target.value) || 1)} className="w-16 bg-black/30 border border-white/10 rounded-lg p-2 text-center text-white text-sm focus:outline-none focus:border-amber-500"/>
-                                    <span className="text-xs text-slate-300">leads to:</span>
+                                <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><Zap size={16} className="text-amber-500"/> Quick Auto-Assign</h4>
+                                <div className="space-y-3">
+                                    <p className="text-xs text-slate-400">Select amount and direction:</p>
+                                    
+                                    {/* 🔥 Amount & Direction Controls */}
+                                    <div className="flex items-center gap-2">
+                                        <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(parseInt(e.target.value) || 1)} className="w-16 bg-black/30 border border-white/10 rounded-lg p-2 text-center text-white text-sm focus:outline-none focus:border-amber-500"/>
+                                        <div className="flex-1 flex bg-black/20 p-1 rounded-lg border border-white/5">
+                                            <button onClick={() => setAssignDirection('newest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'newest' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                                                <ArrowUp size={12}/> Newest (Top)
+                                            </button>
+                                            <button onClick={() => setAssignDirection('oldest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'oldest' ? 'bg-blue-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                                                <ArrowDown size={12}/> Oldest (Bottom)
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -479,7 +499,7 @@ const UserInbox = ({ isEmbedded = false }) => {
                                     <div key={agent._id} className={`flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:${theme.soft} hover:${theme.border} transition group`}>
                                         <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{agent.name.charAt(0).toUpperCase()}</div><div><h4 className="text-white font-bold text-sm">{agent.name}</h4><p className="text-[10px] text-slate-400">{agent.email}</p></div></div>
                                         <button onClick={() => handleBulkAssign(agent._id, selectedIds.length === 0)} className={`px-4 py-2 ${selectedIds.length === 0 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500 hover:text-black' : 'bg-white/5 text-slate-300 hover:bg-white/20 hover:text-white'} rounded-lg text-xs font-bold transition flex items-center gap-2`}>
-                                            {selectedIds.length === 0 ? `Auto Assign ${assignAmount}` : 'Assign Selected'} <ChevronRight size={14}/>
+                                            {selectedIds.length === 0 ? `Assign ${assignAmount} (${assignDirection === 'newest' ? 'Top' : 'Bottom'})` : 'Assign Selected'} <ChevronRight size={14}/>
                                         </button>
                                     </div>
                                 ))}
