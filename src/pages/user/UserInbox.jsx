@@ -17,7 +17,8 @@ const THEMES = {
 
 const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
 
-const UserInbox = ({ isEmbedded = false }) => {
+// 🔥 UPDATE: Receive 'initialSelectedContact' prop form Dashboard
+const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [contacts, setContacts] = useState([]);
   const [agents, setAgents] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -46,13 +47,20 @@ const UserInbox = ({ isEmbedded = false }) => {
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignAmount, setAssignAmount] = useState(10); 
-  const [assignDirection, setAssignDirection] = useState('newest'); // 🔥 NEW: 'newest' (Top) or 'oldest' (Bottom)
+  const [assignDirection, setAssignDirection] = useState('newest'); 
 
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role'); 
   const currentUserId = localStorage.getItem('userId');
   const CLOUD_NAME = "dyixoaldi"; 
   const UPLOAD_PRESET = "Chat Bot System"; 
+
+  // 🔥🔥🔥 NEW: Handle External Chat Selection (Dashboard Click)
+  useEffect(() => {
+      if (initialSelectedContact) {
+          setSelectedContact(initialSelectedContact);
+      }
+  }, [initialSelectedContact]);
 
   // --- ACTIONS ---
   const handleThemeChange = (colorKey) => {
@@ -200,21 +208,17 @@ const UserInbox = ({ isEmbedded = false }) => {
   const handleBulkAssign = async (agentId, isQuantityBased = false) => {
     let leadsToAssign = selectedIds;
 
-    // 🔥 MODIFIED: Logic for Top (Newest) vs Bottom (Oldest)
     if (isQuantityBased) {
-        // Clone contacts to avoid mutating state directly during sort
         let sortedUnassigned = [...contacts].filter(c => !c.assignedTo);
 
         if (assignDirection === 'newest') {
-            // Sort Descending (Newest First) -> Top of list
             sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
         } else {
-            // Sort Ascending (Oldest First) -> Bottom of list
             sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime));
         }
 
         const unassignedLeads = sortedUnassigned
-            .slice(0, assignAmount) // Take top X amount from the sorted list
+            .slice(0, assignAmount) 
             .map(c => c._id);
         
         if (unassignedLeads.length === 0) return alert("No unassigned leads available!");
