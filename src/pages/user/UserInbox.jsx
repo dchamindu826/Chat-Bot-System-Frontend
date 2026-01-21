@@ -3,11 +3,10 @@ import MainLayout from '../../layouts/MainLayout';
 import { 
   Search, UserPlus, Send, Paperclip, MoreVertical, 
   CheckSquare, Square, Mic, Image as ImageIcon, 
-  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw, Palette, Type, Minus, Plus, Zap, ArrowUp, ArrowDown 
+  ExternalLink, CheckCheck, MessageSquare, Phone, X, Loader, StopCircle, Trash2, FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, RefreshCw, Palette, Type, Minus, Plus, Zap, ArrowUp, ArrowDown, PlusCircle 
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
-// --- 🔥 THEME CONFIGURATION ---
 const THEMES = {
   slate:   { name: 'Clean',   primary: 'bg-slate-500',   hover: 'hover:bg-slate-400',   text: 'text-slate-300',   border: 'border-slate-500',   soft: 'bg-slate-700/30',   ring: 'focus:ring-slate-400', badge: 'bg-white text-black', bubbleMe: 'bg-slate-600', bubbleYou: 'bg-[#1e293b]' },
   emerald: { name: 'Mint',    primary: 'bg-emerald-500', hover: 'hover:bg-emerald-400', text: 'text-emerald-400', border: 'border-emerald-500/50', soft: 'bg-emerald-500/10', ring: 'focus:ring-emerald-400', badge: 'bg-emerald-500 text-white', bubbleMe: 'bg-emerald-600', bubbleYou: 'bg-[#1e293b]' },
@@ -17,7 +16,6 @@ const THEMES = {
 
 const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
 
-// 🔥 UPDATE: Receive 'initialSelectedContact' prop form Dashboard
 const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [contacts, setContacts] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -25,7 +23,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]); 
   
-  // Customization States
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('chatTheme') || 'slate');
   const [fontIndex, setFontIndex] = useState(1);
   const [showThemePicker, setShowThemePicker] = useState(false);
@@ -49,20 +46,69 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [assignAmount, setAssignAmount] = useState(10); 
   const [assignDirection, setAssignDirection] = useState('newest'); 
 
+  // 🔥 Quick Reply States
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [newTemplateTitle, setNewTemplateTitle] = useState("");
+  const [newTemplateMsg, setNewTemplateMsg] = useState("");
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role'); 
   const currentUserId = localStorage.getItem('userId');
   const CLOUD_NAME = "dyixoaldi"; 
   const UPLOAD_PRESET = "Chat Bot System"; 
 
-  // 🔥🔥🔥 NEW: Handle External Chat Selection (Dashboard Click)
+  // --- 🔥 QUICK REPLY FUNCTIONS (UPDATED API) ---
+  const fetchTemplates = async () => {
+      try {
+          // 🔥 Corrected URL: /api/quick-replies/my
+          const res = await fetch(`${API_BASE_URL}/api/quick-replies/my`, { headers: { token: `Bearer ${token}` } });
+          if(res.ok) {
+              const data = await res.json();
+              setTemplates(data);
+          }
+      } catch(err) { console.error(err); }
+  };
+
+  const handleCreateTemplate = async () => {
+      if(!newTemplateTitle || !newTemplateMsg) return alert("Please fill both fields");
+      try {
+          // 🔥 Corrected URL: /api/quick-replies/add
+          const res = await fetch(`${API_BASE_URL}/api/quick-replies/add`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
+              body: JSON.stringify({ title: newTemplateTitle, message: newTemplateMsg })
+          });
+          if(res.ok) {
+              const saved = await res.json();
+              setTemplates([saved, ...templates]);
+              setIsCreatingTemplate(false);
+              setNewTemplateTitle(""); setNewTemplateMsg("");
+          }
+      } catch(err) { alert("Error saving template"); }
+  };
+
+  const handleDeleteTemplate = async (id) => {
+      if(!window.confirm("Delete this template?")) return;
+      try {
+          // 🔥 Corrected URL
+          await fetch(`${API_BASE_URL}/api/quick-replies/${id}`, { method: 'DELETE', headers: { token: `Bearer ${token}` } });
+          setTemplates(templates.filter(t => t._id !== id));
+      } catch(err) { alert("Delete failed"); }
+  };
+
+  const handleSelectTemplate = (msg) => {
+      setNewMessage(msg); 
+      setShowTemplates(false); 
+  };
+
   useEffect(() => {
       if (initialSelectedContact) {
           setSelectedContact(initialSelectedContact);
       }
   }, [initialSelectedContact]);
 
-  // --- ACTIONS ---
   const handleThemeChange = (colorKey) => {
       setCurrentTheme(colorKey);
       localStorage.setItem('chatTheme', colorKey);
@@ -112,7 +158,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, mediaPreview]);
 
-  // --- SENDING LOGIC ---
   const handleSendMessage = async () => {
       if(!selectedContact) return;
       const textToSend = newMessage.trim();
@@ -418,6 +463,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
                     <div className="p-4 bg-[#0B1120] border-t border-white/5">
                         <div className={`bg-[#1e293b]/50 rounded-2xl flex flex-col border border-white/5 focus-within:${theme.border} transition-colors shadow-lg relative overflow-hidden backdrop-blur-sm`}>
+                            
+                            {/* 🔥🔥 MEDIA PREVIEW */}
                             {mediaPreview && (
                                 <div className="p-3 bg-black/40 border-b border-white/5 flex items-center justify-between animate-in slide-in-from-bottom-2">
                                     <div className="flex items-center gap-3">
@@ -432,7 +479,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     <button onClick={() => setMediaPreview(null)} className="p-2 bg-white/10 hover:bg-red-500 hover:text-white rounded-full transition text-slate-400"><X size={16}/></button>
                                 </div>
                             )}
-                            <div className="flex items-end gap-2 p-2">
+
+                            {/* 🔥🔥 INPUT AREA with QUICK REPLY BUTTON */}
+                            <div className="flex items-end gap-2 p-2 relative">
                                 {isRecording ? (
                                     <div className="flex-1 flex items-center gap-4 px-2 py-2">
                                         <StopCircle className="text-red-500 animate-pulse" size={24}/>
@@ -444,11 +493,52 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                 ) : (
                                     <>
                                         <label className="p-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition cursor-pointer self-center" title="Attach File"><Paperclip size={20}/><input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*,application/pdf,application/msword,audio/*"/></label>
+                                        
+                                        {/* ⚡ Quick Reply Trigger */}
+                                        <button onClick={() => { setShowTemplates(!showTemplates); fetchTemplates(); }} className="p-3 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-xl transition self-center" title="Quick Reply Templates"><Zap size={20}/></button>
+
                                         <textarea placeholder={mediaPreview ? "Add a caption..." : "Type a message..."} className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-slate-500 px-2 py-3 resize-none custom-scrollbar max-h-32" rows={1} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} disabled={uploading}/>
+                                        
                                         {newMessage.trim() || mediaPreview ? (<button onClick={handleSendMessage} disabled={sending} className={`p-3 ${theme.primary} rounded-xl text-white ${theme.hover} transition shadow-lg self-center`}>{sending ? <Loader className="animate-spin" size={20}/> : <Send size={20}/>}</button>) : (<button onClick={startRecording} className="p-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition self-center"><Mic size={20} /></button>)}
                                     </>
                                 )}
+
+                                {/* 🔥🔥 TEMPLATE POPUP */}
+                                {showTemplates && (
+                                    <div className="absolute bottom-16 left-2 w-72 bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-2 fade-in">
+                                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/5">
+                                            <h3 className="text-white font-bold text-xs flex items-center gap-2"><Zap size={14} className="text-amber-400"/> Quick Replies</h3>
+                                            <button onClick={() => setShowTemplates(false)}><X size={14} className="text-slate-400 hover:text-white"/></button>
+                                        </div>
+                                        
+                                        <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-2 mb-2">
+                                            {templates.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">No templates yet.</p> : templates.map(t => (
+                                                <div key={t._id} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg group cursor-pointer" onClick={() => handleSelectTemplate(t.message)}>
+                                                    <div className="flex justify-between items-start">
+                                                        <h4 className="text-xs font-bold text-white mb-1">{t.title}</h4>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(t._id); }} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"><Trash2 size={12}/></button>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 truncate">{t.message}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {isCreatingTemplate ? (
+                                            <div className="space-y-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                                                <input type="text" placeholder="Title" className="w-full bg-transparent border-b border-white/10 text-xs text-white p-1 outline-none" value={newTemplateTitle} onChange={(e) => setNewTemplateTitle(e.target.value)} />
+                                                <textarea placeholder="Message content..." className="w-full bg-transparent border-b border-white/10 text-xs text-slate-300 p-1 outline-none resize-none" rows={2} value={newTemplateMsg} onChange={(e) => setNewTemplateMsg(e.target.value)} />
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => setIsCreatingTemplate(false)} className="flex-1 py-1 text-xs text-slate-400 hover:bg-white/5 rounded">Cancel</button>
+                                                    <button onClick={handleCreateTemplate} className="flex-1 py-1 text-xs bg-amber-500 text-black font-bold rounded hover:bg-amber-400">Save</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => setIsCreatingTemplate(true)} className="w-full py-2 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition"><PlusCircle size={14}/> Create New</button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
+
                             {uploading && <div className="absolute inset-0 bg-[#1e293b]/90 flex items-center justify-center gap-2 z-10 backdrop-blur-sm"><Loader className={`animate-spin ${theme.text}`} size={20}/><span className={`text-xs ${theme.text} font-bold`}>Uploading Media...</span></div>}
                         </div>
                     </div>

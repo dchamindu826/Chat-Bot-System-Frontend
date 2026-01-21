@@ -67,15 +67,12 @@ const UserAgentDash = () => {
                   alert(`Moved to Phase 0${currentPhase + 1} 🚀`);
               }
           } else {
-              // Phase 3 No Answer = End of road
               alert("Phase 03 Ended. Marked as No Answer.");
           }
       }
 
-      // Optimistic UI Update
       setContacts(prev => prev.map(c => c._id === id ? { ...c, ...updatedFields } : c));
 
-      // Backend API Call
       try {
         await fetch(`${API_BASE_URL}/api/crm/contact/${id}`, {
             method: 'PUT',
@@ -100,11 +97,11 @@ const UserAgentDash = () => {
       setViewMode('inbox');
   };
 
-  // --- 4. CSV EXPORT (Phase Aware) ---
+  // --- 4. CSV EXPORT ---
   const exportToCSV = () => {
-      const headers = ["Phone", "Name", "Phase", "Status", "Remarks"];
+      const headers = ["Phone", "Name", "Phase", "Method", "Attempts", "Status", "Remarks"];
       const rows = contacts.filter(c => c.phase === activePhase).map(c => [
-          c.phoneNumber, c.name, `Phase ${c.phase}`, c.callStatus, c.remarks
+          c.phoneNumber, c.name, `Phase ${c.phase}`, c.attemptMethod, c.attemptCount, c.callStatus, c.remarks
       ]);
       let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
       const link = document.createElement("a");
@@ -119,17 +116,14 @@ const UserAgentDash = () => {
       navigate('/login');
   };
 
-  // --- FILTERS & STATS FOR ACTIVE PHASE ---
-  // Only show contacts belonging to the clicked Tab (Phase 1, 2, or 3)
+  // --- FILTERS ---
   const phaseContacts = contacts.filter(c => c.phase === activePhase);
-  
   const filteredContacts = phaseContacts.filter(c => 
       c.phoneNumber.includes(searchTerm) || (c.name && c.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Stats Logic (Per Phase)
+  // Stats Logic
   const totalInPhase = phaseContacts.length;
-  // Completed = Answered or Reject (OR No Answer if it's Phase 3)
   const completedInPhase = phaseContacts.filter(c => 
       ['Answered', 'Reject'].includes(c.callStatus) || (activePhase === 3 && c.callStatus === 'No Answer')
   ).length;
@@ -191,7 +185,7 @@ const UserAgentDash = () => {
             {viewMode === 'campaign' ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     
-                    {/* 🔥 PHASE TABS - Tabs for Phase 1, 2, 3 */}
+                    {/* PHASE TABS */}
                     <div className="flex items-center gap-4 border-b border-white/10 pb-1">
                         {[1, 2, 3].map(phase => (
                             <button 
@@ -207,31 +201,19 @@ const UserAgentDash = () => {
                         ))}
                     </div>
 
-                    {/* 🔥 OVERVIEW CARDS (Updates based on Active Phase) */}
+                    {/* OVERVIEW CARDS - INCREASED FONT SIZES */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Total Card */}
-                        <div className="bg-[#1e293b]/40 border border-white/5 p-5 rounded-2xl flex items-center justify-between">
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase mb-1">Total in Phase 0{activePhase}</p>
-                                <h3 className="text-3xl font-bold text-white">{totalInPhase}</h3>
-                            </div>
-                            <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400"><User size={24}/></div>
+                        <div className="bg-[#1e293b]/40 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
+                            <div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Total Assigned</p><h3 className="text-5xl font-bold text-white tracking-tight">{totalInPhase}</h3></div>
+                            <div className="p-4 bg-blue-500/10 rounded-2xl text-blue-400"><User size={32}/></div>
                         </div>
-                        {/* Completed Card */}
-                        <div className="bg-[#1e293b]/40 border border-white/5 p-5 rounded-2xl flex items-center justify-between">
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase mb-1">Completed</p>
-                                <h3 className="text-3xl font-bold text-emerald-400">{completedInPhase}</h3>
-                            </div>
-                            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400"><CheckCircle size={24}/></div>
+                        <div className="bg-[#1e293b]/40 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
+                            <div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Completed</p><h3 className="text-5xl font-bold text-emerald-400 tracking-tight">{completedInPhase}</h3></div>
+                            <div className="p-4 bg-emerald-500/10 rounded-2xl text-emerald-400"><CheckCircle size={32}/></div>
                         </div>
-                        {/* Pending Card */}
-                        <div className="bg-[#1e293b]/40 border border-white/5 p-5 rounded-2xl flex items-center justify-between">
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase mb-1">Pending</p>
-                                <h3 className="text-3xl font-bold text-orange-400">{pendingInPhase}</h3>
-                            </div>
-                            <div className="p-3 bg-orange-500/10 rounded-xl text-orange-400"><Clock size={24}/></div>
+                        <div className="bg-[#1e293b]/40 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
+                            <div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Pending</p><h3 className="text-5xl font-bold text-orange-400 tracking-tight">{pendingInPhase}</h3></div>
+                            <div className="p-4 bg-orange-500/10 rounded-2xl text-orange-400"><Clock size={32}/></div>
                         </div>
                     </div>
 
@@ -243,46 +225,76 @@ const UserAgentDash = () => {
                         </div>
                         <div className="flex gap-2">
                             <button onClick={fetchMyContacts} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 transition"><RefreshCcw size={18}/></button>
-                            <button onClick={exportToCSV} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><Download size={16}/> Export Phase CSV</button>
+                            <button onClick={exportToCSV} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><Download size={16}/> CSV</button>
                         </div>
                     </div>
 
-                    {/* DATA TABLE */}
-                    <div className="bg-[#1e293b]/30 border border-white/5 rounded-xl overflow-hidden">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-[#0f172a] text-slate-400 uppercase text-xs">
+                    {/* 🔥 DATA TABLE - OPTIMIZED ALIGNMENT 🔥 */}
+                    <div className="bg-[#1e293b]/30 border border-white/5 rounded-xl overflow-hidden shadow-xl">
+                        <table className="w-full text-sm">
+                            <thead className="bg-[#0f172a] text-slate-400 uppercase text-xs font-bold">
                                 <tr>
-                                    <th className="p-4 w-16">#</th>
-                                    <th className="p-4">Customer</th>
-                                    <th className="p-4">Action</th>
-                                    <th className="p-4">Status</th>
-                                    <th className="p-4 w-64">Remark</th>
+                                    <th className="p-4 w-12">#</th>
+    <th className="p-4 text-left w-1/4">Customer Info</th>
+    <th className="p-4 text-center">Method</th>
+    <th className="p-4 text-center">Att.</th>
+    <th className="p-4 text-center">Chat</th>
+    <th className="p-4 text-center w-40">Status</th>
+    <th className="p-4 text-left w-1/4">Remark</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {currentItems.length === 0 ? (
-                                    <tr><td colSpan="5" className="p-8 text-center text-slate-500">No leads in Phase 0{activePhase}</td></tr>
+                                    <tr><td colSpan="7" className="p-10 text-center text-slate-500">No leads in Phase 0{activePhase}</td></tr>
                                 ) : currentItems.map((contact, index) => (
-                                    <tr key={contact._id} className="hover:bg-white/[0.02]">
-                                        <td className="p-4 text-slate-500">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                                        <td className="p-4">
-                                            <div className="font-bold text-white">{contact.phoneNumber}</div>
+                                    <tr key={contact._id} className="hover:bg-white/[0.02] transition-colors">
+                                        <td className="p-4 text-slate-500 text-left">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                                        
+                                        {/* Customer Info */}
+                                        <td className="p-4 text-left">
+                                            <div className="font-bold text-white text-base">{contact.phoneNumber}</div>
                                             <div className="text-xs text-slate-500">{contact.name || "Guest"}</div>
                                         </td>
                                         
-                                        {/* 🔥 DIRECT CHAT BUTTON */}
-                                        <td className="p-4">
-                                            <button onClick={() => handleOpenChat(contact)} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-md border border-indigo-500/20 transition-all text-xs font-bold">
-                                                <MessageSquare size={14}/> Chat
+                                        {/* Method - Centered */}
+                                        <td className="p-4 text-center">
+                                            <select 
+                                                value={contact.attemptMethod || ''} 
+                                                onChange={(e) => handleUpdateRow(contact._id, 'attemptMethod', e.target.value)}
+                                                className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-24 text-center cursor-pointer"
+                                            >
+                                                <option value="">-</option>
+                                                <option value="3CX">3CX</option>
+                                                <option value="Direct">Direct</option>
+                                                <option value="WhatsApp">WhatsApp</option>
+                                            </select>
+                                        </td>
+
+                                        {/* Attempts - Centered */}
+                                        <td className="p-4 text-center">
+                                            <select 
+                                                value={contact.attemptCount || '0'} 
+                                                onChange={(e) => handleUpdateRow(contact._id, 'attemptCount', e.target.value)}
+                                                className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-16 text-center cursor-pointer"
+                                            >
+                                                {[0,1,2,3,4,5].map(num => <option key={num} value={num}>{num}</option>)}
+                                                <option value="5+">5+</option>
+                                            </select>
+                                        </td>
+
+                                        {/* Chat - Centered */}
+                                        <td className="p-4 text-center">
+                                            <button onClick={() => handleOpenChat(contact)} className="p-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition border border-indigo-500/20 shadow-md">
+                                                <MessageSquare size={16}/>
                                             </button>
                                         </td>
 
-                                        {/* 🔥 STATUS DROPDOWN (Simplified) */}
-                                        <td className="p-4">
+                                        {/* Status - Centered */}
+                                        <td className="p-4 text-center">
                                             <select 
                                                 value={contact.callStatus || 'Pending'}
                                                 onChange={(e) => handleUpdateRow(contact._id, 'callStatus', e.target.value)}
-                                                className={`rounded-md px-2 py-1 text-xs font-bold outline-none cursor-pointer border border-transparent focus:border-white/20 ${getStatusColor(contact.callStatus)}`}
+                                                className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer border border-transparent w-32 text-center transition-all ${getStatusColor(contact.callStatus)}`}
                                             >
                                                 <option value="Pending">Pending</option>
                                                 <option value="Answered">Answered</option>
@@ -291,13 +303,14 @@ const UserAgentDash = () => {
                                             </select>
                                         </td>
 
-                                        <td className="p-4">
+                                        {/* Remark - Left Aligned & Wide */}
+                                        <td className="p-4 text-left">
                                             <input 
                                                 type="text" 
-                                                placeholder="Remark..." 
+                                                placeholder="Write a remark..." 
                                                 value={contact.remarks || ''} 
                                                 onChange={(e) => handleUpdateRow(contact._id, 'remarks', e.target.value)} 
-                                                className="bg-transparent border-b border-white/10 w-full outline-none text-slate-300 focus:border-indigo-500 transition-colors"
+                                                className="bg-transparent border-b border-white/10 w-full outline-none text-slate-300 text-sm py-1 focus:border-indigo-500 transition-colors placeholder-slate-700"
                                             />
                                         </td>
                                     </tr>
@@ -317,7 +330,6 @@ const UserAgentDash = () => {
 
                 </div>
             ) : (
-                /* INBOX VIEW */
                 <div className="h-[82vh] rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-in fade-in slide-in-from-right-4 duration-500">
                     <UserInbox isEmbedded={true} initialSelectedContact={chatTarget} />
                 </div>
