@@ -59,10 +59,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const CLOUD_NAME = "dyixoaldi"; 
   const UPLOAD_PRESET = "Chat Bot System"; 
 
-  // --- 🔥 QUICK REPLY FUNCTIONS (UPDATED API) ---
+  // --- 🔥 QUICK REPLY FUNCTIONS ---
   const fetchTemplates = async () => {
       try {
-          // 🔥 Corrected URL: /api/quick-replies/my
           const res = await fetch(`${API_BASE_URL}/api/quick-replies/my`, { headers: { token: `Bearer ${token}` } });
           if(res.ok) {
               const data = await res.json();
@@ -74,7 +73,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const handleCreateTemplate = async () => {
       if(!newTemplateTitle || !newTemplateMsg) return alert("Please fill both fields");
       try {
-          // 🔥 Corrected URL: /api/quick-replies/add
           const res = await fetch(`${API_BASE_URL}/api/quick-replies/add`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
@@ -92,7 +90,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const handleDeleteTemplate = async (id) => {
       if(!window.confirm("Delete this template?")) return;
       try {
-          // 🔥 Corrected URL
           await fetch(`${API_BASE_URL}/api/quick-replies/${id}`, { method: 'DELETE', headers: { token: `Bearer ${token}` } });
           setTemplates(templates.filter(t => t._id !== id));
       } catch(err) { alert("Delete failed"); }
@@ -462,7 +459,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                     </div>
 
                     <div className="p-4 bg-[#0B1120] border-t border-white/5">
-                        <div className={`bg-[#1e293b]/50 rounded-2xl flex flex-col border border-white/5 focus-within:${theme.border} transition-colors shadow-lg relative overflow-hidden backdrop-blur-sm`}>
+                        {/* 🔥🔥 FIX: REMOVED overflow-hidden HERE */}
+                        <div className={`bg-[#1e293b]/50 rounded-2xl flex flex-col border border-white/5 focus-within:${theme.border} transition-colors shadow-lg relative backdrop-blur-sm`}>
                             
                             {/* 🔥🔥 MEDIA PREVIEW */}
                             {mediaPreview && (
@@ -503,7 +501,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     </>
                                 )}
 
-                                {/* 🔥🔥 TEMPLATE POPUP */}
+                                {/* 🔥🔥 TEMPLATE POPUP (Fix: Visible now) */}
                                 {showTemplates && (
                                     <div className="absolute bottom-16 left-2 w-72 bg-[#1e293b] border border-white/10 rounded-2xl shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-2 fade-in">
                                         <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/5">
