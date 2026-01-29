@@ -68,13 +68,14 @@ const UserTools = () => {
       } catch (err) { console.error(err); }
   };
 
+  // 🔥 FIXED: Removing 'APPROVED' filter so you can see ALL templates
   const fetchTemplates = async () => {
       try {
           const res = await fetch(`${API_BASE_URL}/api/templates`, { headers: { token: `Bearer ${token}` } });
           const data = await res.json();
           if(Array.isArray(data)) {
-              const approved = data.filter(t => t.status === 'APPROVED');
-              setTemplates(approved);
+              // Now showing ALL templates to debug visibility issues
+              setTemplates(data); 
           }
       } catch (err) { console.error(err); }
   };
@@ -135,6 +136,11 @@ const UserTools = () => {
     if (useTemplate) {
         if (!selectedTemplate) return alert("Please select a template!");
         
+        // 🔥 Warn if template is not approved
+        if (selectedTemplate.status !== 'APPROVED') {
+            return alert(`This template is currently ${selectedTemplate.status}. You can only send APPROVED templates.`);
+        }
+
         // Check Header Requirement
         const headerFormat = selectedTemplate?.components?.find(c => c.type === 'HEADER')?.format;
         const isMediaRequired = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
@@ -310,18 +316,27 @@ const UserTools = () => {
                                                 className={`w-full p-3 rounded-xl mt-1 outline-none ${inputBg}`}
                                             >
                                                 <option value="">-- Choose Template --</option>
-                                                {templates.map(t => <option key={t.id} value={t.id}>{t.name} ({t.language})</option>)}
+                                                {/* 🔥 UPDATED: Show Status next to Name */}
+                                                {templates.map(t => (
+                                                    <option key={t.id} value={t.id}>
+                                                        {t.name} ({t.language}) - [{t.status}]
+                                                    </option>
+                                                ))}
                                             </select>
                                         </div>
 
                                         {selectedTemplate && (
                                             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                                                <p className="text-xs text-slate-500 font-bold mb-2">PREVIEW</p>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <p className="text-xs text-slate-500 font-bold">PREVIEW</p>
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${selectedTemplate.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                                        {selectedTemplate.status}
+                                                    </span>
+                                                </div>
                                                 <p className="text-sm text-slate-300 whitespace-pre-wrap">{selectedTemplate.components.find(c => c.type === 'BODY')?.text}</p>
                                                 
                                                 {getVariableCount(selectedTemplate.components.find(c => c.type === 'BODY')?.text || '') > 0 && (
                                                     <div className="mt-4 space-y-2">
-                                                        {/* 🔥 FIXED: Escaped {{ }} characters to prevent Syntax Error */}
                                                         <p className="text-xs text-orange-400 font-bold">Variables ({'{{1}}'}, {'{{2}}'})</p>
                                                         {Array.from({ length: getVariableCount(selectedTemplate.components.find(c => c.type === 'BODY')?.text) }).map((_, i) => (
                                                             <input 
