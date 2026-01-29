@@ -3,7 +3,7 @@ import MainLayout from '../../layouts/MainLayout';
 import { 
     Link, Copy, Send, Users, FileText, Download, 
     Calendar, Paperclip, Search, CheckSquare, Square, 
-    Loader, RefreshCw, Clock, CheckCircle, XCircle 
+    Loader, RefreshCw, Clock, CheckCircle, XCircle, LayoutTemplate 
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,25 +16,30 @@ const UserTools = () => {
   const UPLOAD_PRESET = "Chat Bot System"; 
 
   // Tabs State
-  const [activeTab, setActiveTab] = useState('link'); // 'link', 'broadcast', 'contacts'
+  const [activeTab, setActiveTab] = useState('link');
 
   // Data States
   const [contacts, setContacts] = useState([]);
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [templates, setTemplates] = useState([]); 
   
-  // Broadcast States (NEW)
+  // Broadcast States
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [broadcastHistory, setBroadcastHistory] = useState([]);
   
   // Form States
   const [campaignName, setCampaignName] = useState('');
-  const [broadcastMsg, setBroadcastMsg] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
-  const [mediaUrl, setMediaUrl] = useState(''); // Store uploaded URL
+  const [mediaUrl, setMediaUrl] = useState('');
+
+  // Template Logic States
+  const [useTemplate, setUseTemplate] = useState(false); 
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateVars, setTemplateVars] = useState({}); 
+  const [customMsg, setCustomMsg] = useState(''); 
 
   // Link Gen State
   const [phone, setPhone] = useState('');
@@ -46,12 +51,10 @@ const UserTools = () => {
 
   const token = localStorage.getItem('token');
 
-  // --- 1. LOAD DATA (CONTACTS & HISTORY) ---
+  // --- 1. LOAD DATA ---
   const fetchContacts = async () => {
       try {
-          const res = await fetch(`${API_BASE_URL}/api/crm/contacts`, { 
-              headers: { token: `Bearer ${token}` } 
-          });
+          const res = await fetch(`${API_BASE_URL}/api/crm/contacts`, { headers: { token: `Bearer ${token}` } });
           const data = await res.json();
           if(Array.isArray(data)) setContacts(data);
       } catch (err) { console.error(err); }
@@ -59,17 +62,29 @@ const UserTools = () => {
 
   const fetchHistory = async () => {
       try {
-          const res = await fetch(`${API_BASE_URL}/api/broadcast`, { 
-              headers: { token: `Bearer ${token}` } 
-          });
+          const res = await fetch(`${API_BASE_URL}/api/broadcast`, { headers: { token: `Bearer ${token}` } });
           const data = await res.json();
           if(Array.isArray(data)) setBroadcastHistory(data);
       } catch (err) { console.error(err); }
   };
 
+  const fetchTemplates = async () => {
+      try {
+          const res = await fetch(`${API_BASE_URL}/api/templates`, { headers: { token: `Bearer ${token}` } });
+          const data = await res.json();
+          if(Array.isArray(data)) {
+              const approved = data.filter(t => t.status === 'APPROVED');
+              setTemplates(approved);
+          }
+      } catch (err) { console.error(err); }
+  };
+
   useEffect(() => {
     fetchContacts();
-    if(activeTab === 'broadcast') fetchHistory();
+    if(activeTab === 'broadcast') {
+        fetchHistory();
+        fetchTemplates();
+    }
   }, [activeTab]);
 
   // --- 2. CSV EXPORT LOGIC ---
@@ -111,41 +126,54 @@ const UserTools = () => {
     }
   };
 
-  // --- 4. 🔥 NEW BROADCAST CAMPAIGN LOGIC ---
+  // --- 4. CREATE BROADCAST ---
   const handleCreateCampaign = async () => {
     if(selectedContacts.length === 0) return alert("Please select contacts first!");
-    if(!broadcastMsg && !mediaUrl) return alert("Please enter a message or attach a file!");
     if(!campaignName) return alert("Please give a Campaign Name!");
     if(!scheduleTime) return alert("Please select a Schedule Time!");
+
+    if (useTemplate) {
+        if (!selectedTemplate) return alert("Please select a template!");
+        
+        // Check Header Requirement
+        const headerFormat = selectedTemplate?.components?.find(c => c.type === 'HEADER')?.format;
+        const isMediaRequired = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+        
+        if (isMediaRequired && !mediaUrl) {
+            return alert(`This template requires a ${headerFormat} header! Please upload one.`);
+        }
+    } else {
+        if (!customMsg && !mediaUrl) return alert("Please enter a message!");
+    }
 
     if(!window.confirm(`Schedule "${campaignName}" for ${selectedContacts.length} people?`)) return;
 
     setSending(true);
 
-    // 1. Get Phone Numbers from IDs
     const recipientNumbers = selectedContacts.map(id => {
         const contact = contacts.find(c => c._id === id);
         return contact ? contact.phoneNumber : null;
     }).filter(Boolean);
 
-    // 2. Determine Message Type
     let msgType = 'text';
     if (mediaUrl) {
         if (mediaFile?.type.startsWith('image')) msgType = 'image';
         else if (mediaFile?.type.startsWith('video')) msgType = 'video';
-        else if (mediaFile?.type.startsWith('audio')) msgType = 'audio';
         else msgType = 'document';
     }
 
-    // 3. Send to Backend
     try {
         const payload = {
             name: campaignName,
             recipients: recipientNumbers,
-            messageType: msgType,
-            message: broadcastMsg,
+            scheduledTime: new Date(scheduleTime).toISOString(),
+            isTemplate: useTemplate,
+            messageType: useTemplate ? 'template' : msgType,
+            message: customMsg,
             mediaUrl: mediaUrl,
-            scheduledTime: new Date(scheduleTime).toISOString()
+            templateName: selectedTemplate?.name,
+            templateLanguage: selectedTemplate?.language,
+            templateVariables: Object.values(templateVars)
         };
 
         const res = await fetch(`${API_BASE_URL}/api/broadcast/create`, {
@@ -157,12 +185,13 @@ const UserTools = () => {
         if(res.ok) {
             alert("Campaign Scheduled Successfully! 🚀");
             setCampaignName('');
-            setBroadcastMsg('');
+            setCustomMsg('');
             setMediaUrl('');
             setMediaFile(null);
             setScheduleTime('');
             setSelectedContacts([]);
-            fetchHistory(); // Refresh History
+            setTemplateVars({});
+            fetchHistory();
         } else {
             alert("Failed to create campaign.");
         }
@@ -174,13 +203,10 @@ const UserTools = () => {
     }
   };
 
-  // Helper: Toggle Selection
+  // Helper Functions
   const toggleSelect = (id) => {
-    if(selectedContacts.includes(id)) {
-        setSelectedContacts(selectedContacts.filter(c => c !== id));
-    } else {
-        setSelectedContacts([...selectedContacts, id]);
-    }
+    if(selectedContacts.includes(id)) setSelectedContacts(selectedContacts.filter(c => c !== id));
+    else setSelectedContacts([...selectedContacts, id]);
   };
 
   const toggleSelectAll = () => {
@@ -188,12 +214,20 @@ const UserTools = () => {
     else setSelectedContacts(contacts.map(c => c._id));
   };
 
-  // Filter & Pagination
+  const getVariableCount = (text) => {
+      if (!text) return 0;
+      const matches = text.match(/{{/g);
+      return matches ? matches.length : 0;
+  };
+
+  const headerFormat = selectedTemplate?.components?.find(c => c.type === 'HEADER')?.format;
+  const isMediaTemplate = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat);
+  const showMediaUpload = !useTemplate || (useTemplate && isMediaTemplate);
+
   const filteredContacts = contacts.filter(c => c.phoneNumber.includes(searchTerm));
   const totalPages = Math.ceil(filteredContacts.length / itemsPerPage);
   const currentData = filteredContacts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Styles
   const isDark = theme === 'dark';
   const bgColor = isDark ? 'bg-[#0B1120]' : 'bg-gray-100';
   const cardColor = isDark ? 'bg-[#1e293b]/50 border-white/5' : 'bg-white border-gray-200 shadow-sm';
@@ -205,7 +239,6 @@ const UserTools = () => {
     <MainLayout>
       <div className={`min-h-screen p-6 ${bgColor} transition-colors duration-300`}>
         
-        {/* HEADER */}
         <div className="max-w-6xl mx-auto flex justify-between items-center mb-8">
             <div>
                 <h2 className={`text-3xl font-bold ${textColor}`}>Power Tools</h2>
@@ -213,7 +246,6 @@ const UserTools = () => {
             </div>
         </div>
 
-        {/* TABS */}
         <div className="max-w-6xl mx-auto mb-6 flex gap-4 overflow-x-auto pb-2">
             {[
                 { id: 'link', icon: Link, label: 'Link Generator' },
@@ -232,10 +264,8 @@ const UserTools = () => {
             ))}
         </div>
 
-        {/* --- CONTENT AREA --- */}
         <div className="max-w-6xl mx-auto">
             
-            {/* 1. LINK GENERATOR (Unchanged) */}
             {activeTab === 'link' && (
                 <div className={`${cardColor} p-8 rounded-3xl border animate-in fade-in slide-in-from-bottom-4`}>
                     <h3 className={`font-bold text-xl mb-6 flex items-center gap-2 ${textColor}`}><Link className="text-blue-500"/> WhatsApp Link Generator</h3>
@@ -249,38 +279,84 @@ const UserTools = () => {
                 </div>
             )}
 
-            {/* 2. BROADCAST (🔥 UPDATED WITH CAMPAIGN LOGIC) */}
             {activeTab === 'broadcast' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
                     
-                    {/* Left: Campaign Form + History */}
                     <div className="space-y-6">
-                        
-                        {/* Form */}
                         <div className={`${cardColor} p-6 rounded-3xl border`}>
                             <h3 className={`font-bold text-lg mb-4 ${textColor}`}>Create Campaign</h3>
                             <div className="space-y-4">
                                 <div>
                                     <label className="text-xs text-slate-400 uppercase font-bold">Campaign Name</label>
-                                    <input type="text" value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="e.g. New Year Offer" className={`w-full p-3 rounded-xl mt-1 outline-none ${inputBg}`}/>
+                                    <input type="text" value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="e.g. Feb Intake" className={`w-full p-3 rounded-xl mt-1 outline-none ${inputBg}`}/>
                                 </div>
 
-                                <div>
-                                    <label className="text-xs text-slate-400 uppercase font-bold">Message</label>
-                                    <textarea value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} placeholder="Type your broadcast message..." rows={4} className={`w-full p-3 rounded-xl mt-1 outline-none ${inputBg}`}/>
+                                <div className="flex bg-black/20 p-1 rounded-xl">
+                                    <button onClick={() => setUseTemplate(false)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${!useTemplate ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Custom Message</button>
+                                    <button onClick={() => setUseTemplate(true)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${useTemplate ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Use Template</button>
                                 </div>
+
+                                {useTemplate ? (
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div>
+                                            <label className="text-xs text-slate-400 uppercase font-bold">Select Template</label>
+                                            <select 
+                                                onChange={(e) => {
+                                                    const tpl = templates.find(t => t.id === e.target.value);
+                                                    setSelectedTemplate(tpl);
+                                                    setTemplateVars({});
+                                                    setMediaUrl('');
+                                                }} 
+                                                className={`w-full p-3 rounded-xl mt-1 outline-none ${inputBg}`}
+                                            >
+                                                <option value="">-- Choose Template --</option>
+                                                {templates.map(t => <option key={t.id} value={t.id}>{t.name} ({t.language})</option>)}
+                                            </select>
+                                        </div>
+
+                                        {selectedTemplate && (
+                                            <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                                <p className="text-xs text-slate-500 font-bold mb-2">PREVIEW</p>
+                                                <p className="text-sm text-slate-300 whitespace-pre-wrap">{selectedTemplate.components.find(c => c.type === 'BODY')?.text}</p>
+                                                
+                                                {getVariableCount(selectedTemplate.components.find(c => c.type === 'BODY')?.text || '') > 0 && (
+                                                    <div className="mt-4 space-y-2">
+                                                        {/* 🔥 FIXED: Escaped {{ }} characters to prevent Syntax Error */}
+                                                        <p className="text-xs text-orange-400 font-bold">Variables ({'{{1}}'}, {'{{2}}'})</p>
+                                                        {Array.from({ length: getVariableCount(selectedTemplate.components.find(c => c.type === 'BODY')?.text) }).map((_, i) => (
+                                                            <input 
+                                                                key={i} 
+                                                                type="text" 
+                                                                placeholder={`Value for {{${i+1}}}`} 
+                                                                className={`w-full p-2 rounded-lg text-sm ${inputBg}`}
+                                                                onChange={(e) => setTemplateVars({...templateVars, [i]: e.target.value})}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="text-xs text-slate-400 uppercase font-bold">Message</label>
+                                        <textarea value={customMsg} onChange={(e) => setCustomMsg(e.target.value)} placeholder="Type message..." rows={4} className={`w-full p-3 rounded-xl mt-1 outline-none ${inputBg}`}/>
+                                    </div>
+                                )}
                                 
-                                {/* Media Upload */}
-                                <div className="flex gap-2">
-                                    <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl cursor-pointer border border-dashed transition ${isDark ? 'border-slate-600 hover:bg-white/5' : 'border-slate-300 hover:bg-gray-50'}`}>
-                                        {uploading ? <Loader className="animate-spin text-blue-500"/> : <Paperclip size={18} className={subText}/>} 
-                                        <span className={subText}>{mediaFile ? mediaFile.name : "Attach Image/Doc"}</span>
-                                        <input type="file" className="hidden" onChange={handleFileUpload}/>
-                                    </label>
-                                </div>
-                                {mediaUrl && <p className="text-xs text-emerald-500">File Uploaded: Ready to send</p>}
+                                {showMediaUpload && (
+                                    <>
+                                        <div className="flex gap-2">
+                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl cursor-pointer border border-dashed transition ${isDark ? 'border-slate-600 hover:bg-white/5' : 'border-slate-300 hover:bg-gray-50'}`}>
+                                                {uploading ? <Loader className="animate-spin text-blue-500"/> : <Paperclip size={18} className={subText}/>} 
+                                                <span className={subText}>{mediaFile ? mediaFile.name : (useTemplate ? "Upload Template Media" : "Attach Media")}</span>
+                                                <input type="file" className="hidden" onChange={handleFileUpload}/>
+                                            </label>
+                                        </div>
+                                        {mediaUrl && <p className="text-xs text-emerald-500">File Ready ✅</p>}
+                                    </>
+                                )}
 
-                                {/* Scheduling */}
                                 <div className={`p-4 rounded-xl border ${isDark ? 'bg-black/20 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
                                     <div className="flex items-center gap-2 mb-2">
                                         <Calendar size={18} className="text-orange-500"/> <span className={`font-bold ${textColor}`}>Schedule Time</span>
@@ -295,7 +371,6 @@ const UserTools = () => {
                             </div>
                         </div>
 
-                        {/* Broadcast History */}
                         <div className={`${cardColor} p-6 rounded-3xl border h-[300px] overflow-hidden flex flex-col`}>
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className={`font-bold text-lg ${textColor}`}>History</h3>
@@ -326,7 +401,6 @@ const UserTools = () => {
                         </div>
                     </div>
 
-                    {/* Right: Select Contacts (UNCHANGED) */}
                     <div className={`${cardColor} p-6 rounded-3xl border flex flex-col h-[800px]`}>
                         <div className="flex justify-between items-center mb-4">
                             <h3 className={`font-bold text-lg ${textColor}`}>Select Contacts ({selectedContacts.length})</h3>
@@ -356,7 +430,6 @@ const UserTools = () => {
                 </div>
             )}
 
-            {/* 3. CONTACT LIST (UNCHANGED) */}
             {activeTab === 'contacts' && (
                 <div className={`${cardColor} rounded-3xl border overflow-hidden animate-in fade-in slide-in-from-bottom-4`}>
                     <div className="p-6 border-b border-white/5 flex flex-col md:flex-row justify-between gap-4">
