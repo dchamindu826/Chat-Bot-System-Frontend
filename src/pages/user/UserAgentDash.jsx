@@ -5,17 +5,15 @@ import { API_BASE_URL } from '../../config';
 import { useNavigate } from 'react-router-dom';
 
 const UserAgentDash = () => {
-  const [viewMode, setViewMode] = useState('campaign'); // 'campaign' or 'inbox'
-  const [activePhase, setActivePhase] = useState(1); // 1, 2, 3, or 'All'
+  const [viewMode, setViewMode] = useState('campaign');
+  const [activePhase, setActivePhase] = useState(1);
   
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Chat Navigation State
   const [chatTarget, setChatTarget] = useState(null);
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -33,13 +31,15 @@ const UserAgentDash = () => {
         });
         if (res.ok) {
             const data = await res.json();
-            // Only my assigned contacts
+            
+            // 🔥 FIXED: Agent's Assigned Contacts Filter (UUID Compatibility)
             const myLeads = data.filter(c => {
                 if (!c.assignedTo) return false;
-                const assignedId = typeof c.assignedTo === 'object' ? c.assignedTo._id : c.assignedTo;
-                return assignedId === userId;
+                // c.assignedTo යනු Object එකක් නම් එහි _id හෝ id ගනී. String එකක් නම් කෙලින්ම ගනී.
+                const assignedId = typeof c.assignedTo === 'object' ? (c.assignedTo._id || c.assignedTo.id) : c.assignedTo;
+                return String(assignedId) === String(userId); // string විදියට සංසන්දනය කිරීම
             });
-            // Ensure phase is set (default to 1)
+
             const processedLeads = myLeads.map(c => ({...c, phase: c.phase || 1}));
             setContacts(processedLeads);
         }
@@ -54,17 +54,16 @@ const UserAgentDash = () => {
       const currentContact = contacts.find(c => c._id === id);
       let updatedFields = { ...currentContact, [field]: value };
 
-      // 🔥 AUTO MOVE LOGIC
       if (field === 'callStatus' && value === 'No Answer') {
           const currentPhase = currentContact.phase || 1;
           
           if (currentPhase < 3) {
               const confirmMove = window.confirm(`Call No Answered. Move to PHASE 0${currentPhase + 1}?`);
               if (confirmMove) {
-                  updatedFields.phase = currentPhase + 1; // Increase Phase
-                  updatedFields.callStatus = 'Pending';   // Reset Status
+                  updatedFields.phase = currentPhase + 1;
+                  updatedFields.callStatus = 'Pending';
                   updatedFields.attemptCount = (parseInt(currentContact.attemptCount || 0) + 1).toString();
-                  updatedFields.remarks = `${updatedFields.remarks || ''} [P${currentPhase}: No Answer]`.trim(); // Keep history
+                  updatedFields.remarks = `${updatedFields.remarks || ''} [P${currentPhase}: No Answer]`.trim();
                   alert(`Moved to Phase 0${currentPhase + 1} 🚀`);
               }
           } else {
@@ -72,7 +71,6 @@ const UserAgentDash = () => {
           }
       }
 
-      // Update Local State immediately (Optimistic Update)
       setContacts(prev => prev.map(c => c._id === id ? { ...c, ...updatedFields } : c));
 
       try {
@@ -102,7 +100,6 @@ const UserAgentDash = () => {
   // --- 4. CSV EXPORT ---
   const exportToCSV = () => {
       const headers = ["Phone", "Name", "Phase", "Method", "Attempts", "Status", "Remarks"];
-      // Filter based on active view (All or specific phase)
       const exportData = activePhase === 'All' ? contacts : contacts.filter(c => c.phase === activePhase);
       
       const rows = exportData.map(c => [
@@ -122,33 +119,26 @@ const UserAgentDash = () => {
       navigate('/login');
   };
 
-  // --- 🔥 FILTERS & STATS LOGIC ---
-  
-  // 1. Filter by Phase (or All)
   const phaseContacts = activePhase === 'All' 
     ? contacts 
     : contacts.filter(c => c.phase === activePhase);
 
-  // 2. Filter by Search
-  const filteredContacts = phaseContacts.filter(c => 
-      c.phoneNumber.includes(searchTerm) || (c.name && c.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredContacts = phaseContacts.filter(c => {
+      const pNum = c.phoneNumber || c.phone_number || "";
+      const cName = c.name || "";
+      return pNum.includes(searchTerm) || cName.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
-  // 3. 🔥 SMART STATS CALCULATION
   const totalInPhase = phaseContacts.length;
   
-  // Completed = Answered OR Reject OR No Answer OR (Pending but Attempts > 0)
-  // This logic ensures that if an agent tried calling (attempts > 0), it counts as work done even if status reset to Pending due to phase shift.
   const completedInPhase = phaseContacts.filter(c => {
       const status = c.callStatus;
       const attempts = parseInt(c.attemptCount || 0);
       return ['Answered', 'Reject', 'No Answer'].includes(status) || attempts > 0;
   }).length;
 
-  // Pending = Strictly Pending AND Attempts == 0 (Pure fresh leads)
   const pendingInPhase = totalInPhase - completedInPhase;
 
-  // Pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredContacts.slice(indexOfFirstItem, indexOfLastItem);
@@ -166,7 +156,6 @@ const UserAgentDash = () => {
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-hidden">
         
-        {/* Background Effects */}
         <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"/>
         
         {/* --- HEADER --- */}
@@ -204,9 +193,8 @@ const UserAgentDash = () => {
             {viewMode === 'campaign' ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     
-                    {/* PHASE TABS with OVERALL */}
+                    {/* PHASE TABS */}
                     <div className="flex items-center gap-4 border-b border-white/10 pb-1">
-                        {/* 🔥 Overall Tab */}
                         <button 
                             onClick={() => { setActivePhase('All'); setCurrentPage(1); }}
                             className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activePhase === 'All' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
@@ -214,7 +202,6 @@ const UserAgentDash = () => {
                             <Filter size={16}/> OVERALL
                         </button>
 
-                        {/* Phase 1, 2, 3 Tabs */}
                         {[1, 2, 3].map(phase => (
                             <button 
                                 key={phase}
@@ -262,7 +249,7 @@ const UserAgentDash = () => {
                         </div>
                     </div>
 
-                    {/* 🔥 DATA TABLE 🔥 */}
+                    {/* DATA TABLE */}
                     <div className="bg-[#1e293b]/30 border border-white/5 rounded-xl overflow-hidden shadow-xl">
                         <table className="w-full text-sm">
                             <thead className="bg-[#0f172a] text-slate-400 uppercase text-xs font-bold">
@@ -284,20 +271,17 @@ const UserAgentDash = () => {
                                     <tr key={contact._id} className="hover:bg-white/[0.02] transition-colors">
                                         <td className="p-4 text-slate-500 text-left">{(currentPage - 1) * itemsPerPage + index + 1}</td>
                                         
-                                        {/* Customer Info */}
                                         <td className="p-4 text-left">
                                             <div className="font-bold text-white text-base">{contact.phoneNumber}</div>
                                             <div className="text-xs text-slate-500">{contact.name || "Guest"}</div>
                                         </td>
 
-                                        {/* Show Phase Column if Overall View */}
                                         {activePhase === 'All' && (
                                             <td className="p-4 text-center">
                                                 <span className="bg-white/10 text-slate-300 px-2 py-1 rounded text-xs font-bold">P{contact.phase || 1}</span>
                                             </td>
                                         )}
                                         
-                                        {/* Method */}
                                         <td className="p-4 text-center">
                                             <select 
                                                 value={contact.attemptMethod || ''} 
@@ -311,7 +295,6 @@ const UserAgentDash = () => {
                                             </select>
                                         </td>
 
-                                        {/* Attempts */}
                                         <td className="p-4 text-center">
                                             <select 
                                                 value={contact.attemptCount || '0'} 
@@ -323,14 +306,12 @@ const UserAgentDash = () => {
                                             </select>
                                         </td>
 
-                                        {/* Chat */}
                                         <td className="p-4 text-center">
                                             <button onClick={() => handleOpenChat(contact)} className="p-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition border border-indigo-500/20 shadow-md">
                                                 <MessageSquare size={16}/>
                                             </button>
                                         </td>
 
-                                        {/* Status */}
                                         <td className="p-4 text-center">
                                             <select 
                                                 value={contact.callStatus || 'Pending'}
@@ -344,7 +325,6 @@ const UserAgentDash = () => {
                                             </select>
                                         </td>
 
-                                        {/* Remark */}
                                         <td className="p-4 text-left">
                                             <input 
                                                 type="text" 
@@ -360,7 +340,6 @@ const UserAgentDash = () => {
                         </table>
                     </div>
 
-                    {/* PAGINATION */}
                     <div className="flex justify-between items-center text-xs text-slate-500 px-2 mt-4">
                         <span>Page {currentPage} of {totalPages || 1}</span>
                         <div className="flex gap-2">
