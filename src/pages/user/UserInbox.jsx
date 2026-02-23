@@ -308,17 +308,19 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
+  // 🔥 FIXED: Frontend User ID filter එක අයින් කරලා Search එක විතරක් තිව්වා.
   const filteredContacts = contacts
     .filter(c => {
       const contactPhone = c.phoneNumber || c.phone_number || "";
       const matchesSearch = contactPhone.includes(searchTerm);
+      
       if(userRole === 'agent') {
-          if (!c.assignedTo) return false;
-          // 🔥 FIXED: Agent assignedTo Check (UUID compatibility)
-          const assignedId = typeof c.assignedTo === 'object' ? (c.assignedTo._id || c.assignedTo.id) : c.assignedTo;
-          return assignedId === currentUserId && matchesSearch;
+          // Agent කෙනෙක්ට එන්නේ එයාගේ Contacts විතරයි. ඒ නිසා Search වෙනවද විතරක් බැලුවම ඇති.
+          return matchesSearch;
       }
-      return (activeTab === 'All' ? true : activeTab === 'Unassigned' ? !c.assignedTo : c.assignedTo) && matchesSearch;
+      
+      // Admin ට නම් Tabs ටිකට අනුව Filter වෙන්න ඕනේ
+      return (activeTab === 'All' ? true : activeTab === 'Unassigned' ? !c.assignedTo : !!c.assignedTo) && matchesSearch;
     })
     .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
 

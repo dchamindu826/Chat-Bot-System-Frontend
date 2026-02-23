@@ -32,19 +32,9 @@ const UserAgentDash = () => {
         if (res.ok) {
             const data = await res.json();
             
-            // 🔥 FIXED: Agent's Assigned Contacts Filter
-            const myLeads = data.filter(c => {
-                // assignedTo එකක් නැත්නම් අතාරින්න
-                if (!c.assignedTo) return false;
-
-                // Backend එකෙන් එන assignedTo අගය string එකක් (UUID) විදියට එන්නේ
-                const assignedId = typeof c.assignedTo === 'object' ? (c.assignedTo._id || c.assignedTo.id) : c.assignedTo;
-                
-                // LocalStorage එකේ තියෙන userId එකයි, assignedId එකයි සමානද බලනවා
-                return String(assignedId) === String(userId); 
-            });
-
-            const processedLeads = myLeads.map(c => ({...c, phase: c.phase || 1}));
+            // 🔥 FIXED: Backend එකෙන් එද්දිම Agent ට අදාළ Contacts විතරක් එන නිසා, 
+            // Frontend එකේ ආයෙත් ID එකෙන් Filter කරන්න ඕනේ නෑ! කෙලින්ම Data ටික ගන්නවා.
+            const processedLeads = data.map(c => ({...c, phase: c.phase || 1}));
             setContacts(processedLeads);
         }
     } catch (err) { console.error(err); } 
