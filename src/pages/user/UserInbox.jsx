@@ -148,9 +148,24 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
   useEffect(() => { 
       loadData(); 
-      const interval = setInterval(loadData, 5000); 
+      const interval = setInterval(() => {
+          loadData();
+          if (selectedContact) {
+              fetch(`${API_BASE_URL}/api/messages/${selectedContact._id}`, { headers: { token: `Bearer ${token}` } })
+                .then(res => res.json())
+                .then(data => { 
+                    if(Array.isArray(data)) {
+                        setMessages(prev => {
+                            if (prev.length !== data.length) return data;
+                            return prev;
+                        });
+                    }
+                })
+                .catch(err => console.error(err));
+          }
+      }, 3000); 
       return () => clearInterval(interval);
-  }, []);
+  }, [selectedContact, token]);
 
   useEffect(() => {
     if(selectedContact) {
@@ -160,7 +175,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             .catch(err => console.error(err));
         setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, unreadCount: 0 } : c));
     }
-  }, [selectedContact]);
+  }, [selectedContact, token]);
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, mediaPreview]);
 
@@ -293,14 +308,14 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
-  // 🔥 FIXED: Added safety check for c.phoneNumber to prevent 'includes' crash
   const filteredContacts = contacts
     .filter(c => {
       const contactPhone = c.phoneNumber || c.phone_number || "";
       const matchesSearch = contactPhone.includes(searchTerm);
       if(userRole === 'agent') {
           if (!c.assignedTo) return false;
-          const assignedId = typeof c.assignedTo === 'object' ? c.assignedTo._id : c.assignedTo;
+          // 🔥 FIXED: Agent assignedTo Check (UUID compatibility)
+          const assignedId = typeof c.assignedTo === 'object' ? (c.assignedTo._id || c.assignedTo.id) : c.assignedTo;
           return assignedId === currentUserId && matchesSearch;
       }
       return (activeTab === 'All' ? true : activeTab === 'Unassigned' ? !c.assignedTo : c.assignedTo) && matchesSearch;
@@ -308,7 +323,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
 
   const renderMessageContent = (msg) => {
-    const mediaUrl = msg.mediaUrl || (msg.type !== 'text' ? msg.content : null);
+    const mediaUrl = msg.mediaUrl || msg.media_url || (msg.type !== 'text' ? msg.content : null);
     const hasMedia = !!mediaUrl;
     const isCaption = msg.text && msg.text !== mediaUrl;
     const isMe = msg.direction === 'outbound' || msg.sender === 'me';
@@ -476,7 +491,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                         ${msg.direction === 'outbound' || msg.sender === 'me' 
                                             ? 'text-white/70' 
                                             : (isDarkMode ? 'text-slate-500' : 'text-gray-400')}`}>
-                                        {new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                                        {/* 🔥 FIXED: Date Formatting fallback */}
+                                        {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
                                         {(msg.direction === 'outbound' || msg.sender === 'me') && <CheckCheck size={12}/>}
                                     </div>
                                 </div>
