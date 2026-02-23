@@ -32,12 +32,16 @@ const UserAgentDash = () => {
         if (res.ok) {
             const data = await res.json();
             
-            // 🔥 FIXED: Agent's Assigned Contacts Filter (UUID Compatibility)
+            // 🔥 FIXED: Agent's Assigned Contacts Filter
             const myLeads = data.filter(c => {
+                // assignedTo එකක් නැත්නම් අතාරින්න
                 if (!c.assignedTo) return false;
-                // c.assignedTo යනු Object එකක් නම් එහි _id හෝ id ගනී. String එකක් නම් කෙලින්ම ගනී.
+
+                // Backend එකෙන් එන assignedTo අගය string එකක් (UUID) විදියට එන්නේ
                 const assignedId = typeof c.assignedTo === 'object' ? (c.assignedTo._id || c.assignedTo.id) : c.assignedTo;
-                return String(assignedId) === String(userId); // string විදියට සංසන්දනය කිරීම
+                
+                // LocalStorage එකේ තියෙන userId එකයි, assignedId එකයි සමානද බලනවා
+                return String(assignedId) === String(userId); 
             });
 
             const processedLeads = myLeads.map(c => ({...c, phase: c.phase || 1}));
