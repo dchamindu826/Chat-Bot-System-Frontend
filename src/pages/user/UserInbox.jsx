@@ -244,16 +244,22 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           let chunks = [];
           recorder.ondataavailable = (e) => chunks.push(e.data);
           recorder.onstop = async () => {
-              const blob = new Blob(chunks, { type: 'audio/webm' });
-              const file = new File([blob], "voice_note.webm", { type: 'audio/webm' });
+              
+              // 🔥 FIX: මෙතන තමයි වෙනස් කළේ. webm වෙනුවට mp4 ලබා දීම.
+              const blob = new Blob(chunks, { type: 'audio/mp4' });
+              // ෆයිල් නේම් එකටත් .mp4 දාලා, type එකත් audio/mp4 කළා
+              const file = new File([blob], `voice_note_${Date.now()}.mp4`, { type: 'audio/mp4' });
+              
               setUploading(true);
               const formData = new FormData();
               formData.append("file", file);
               formData.append("upload_preset", UPLOAD_PRESET); 
               formData.append("cloud_name", CLOUD_NAME);
+              
               const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
               const data = await res.json();
               setUploading(false);
+              
               if(data.secure_url) {
                     setMediaPreview({ url: data.secure_url, type: 'audio', name: 'Voice Note' });
               }
@@ -267,6 +273,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { alert("Cannot access microphone."); }
   };
 
+  
   const stopRecording = () => { if(mediaRecorder) { mediaRecorder.stop(); clearInterval(timerRef.current); } };
   const cancelRecording = () => { if(mediaRecorder) { mediaRecorder.stop(); setMediaRecorder(null); setIsRecording(false); setRecordingTime(0); clearInterval(timerRef.current); setMediaPreview(null); } };
   const formatTime = (seconds) => { const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins}:${secs < 10 ? '0' : ''}${secs}`; };
