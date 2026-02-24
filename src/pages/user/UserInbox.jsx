@@ -245,23 +245,30 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           recorder.ondataavailable = (e) => chunks.push(e.data);
           recorder.onstop = async () => {
               
-              // 🔥 FIX: මෙතන තමයි වෙනස් කළේ. webm වෙනුවට mp4 ලබා දීම.
-              const blob = new Blob(chunks, { type: 'audio/mp4' });
-              // ෆයිල් නේම් එකටත් .mp4 දාලා, type එකත් audio/mp4 කළා
-              const file = new File([blob], `voice_note_${Date.now()}.mp4`, { type: 'audio/mp4' });
+              // 1. Browser එකෙන් එන original WebM විදිහටම තියන්න (නැත්නම් File එක Corrupt වෙනවා)
+              const blob = new Blob(chunks, { type: 'audio/webm' });
+              const file = new File([blob], `voice_note_${Date.now()}.webm`, { type: 'audio/webm' });
               
               setUploading(true);
               const formData = new FormData();
               formData.append("file", file);
               formData.append("upload_preset", UPLOAD_PRESET); 
               formData.append("cloud_name", CLOUD_NAME);
-              
+
               const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
               const data = await res.json();
               setUploading(false);
               
               if(data.secure_url) {
-                    setMediaPreview({ url: data.secure_url, type: 'audio', name: 'Voice Note' });
+                  // 🔥 FIX (THE TRICK): Cloudinary වලට කියලා මේක MP3 එකක් (audio/mpeg) විදිහට Convert කරගන්නවා!
+                  // URL එකේ /upload/ කියන කෑල්ල /upload/f_mp3/ විදිහට වෙනස් කරනවා. 
+                  // ඒ වගේම අගට .mp3 කියලා extension එක දානවා.
+                  
+                  let convertedUrl = data.secure_url.replace('/upload/', '/upload/f_mp3/');
+                  convertedUrl = convertedUrl.substring(0, convertedUrl.lastIndexOf('.')) + '.mp3';
+                  
+                  // දැන් Meta API එකට යන්නේ හරියටම Convert වුණු MP3 URL එකක්!
+                  setMediaPreview({ url: convertedUrl, type: 'audio', name: 'Voice Note' });
               }
               setIsRecording(false);
               setRecordingTime(0);
@@ -273,7 +280,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { alert("Cannot access microphone."); }
   };
 
-  
   const stopRecording = () => { if(mediaRecorder) { mediaRecorder.stop(); clearInterval(timerRef.current); } };
   const cancelRecording = () => { if(mediaRecorder) { mediaRecorder.stop(); setMediaRecorder(null); setIsRecording(false); setRecordingTime(0); clearInterval(timerRef.current); setMediaPreview(null); } };
   const formatTime = (seconds) => { const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins}:${secs < 10 ? '0' : ''}${secs}`; };
