@@ -49,7 +49,7 @@ const Customers = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        const url = `${window.location.origin}/ghost-access?token=${data.accessToken}`;
+        const url = `${window.location.origin}/ghost-access?token=${data.token}`;
         window.open(url, '_blank');
       } else {
         alert(data.message || "Ghost Login Failed!");

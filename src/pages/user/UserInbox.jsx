@@ -35,9 +35,10 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [activeTab, setActiveTab] = useState('Unassigned'); 
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 🔥 FIXED: Agent Filter State එකතු කළා
+  // 🔥 Filters
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('All');
-  // 🔥 FIXED: Right Panel Toggle State
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All'); // NEW: Status Filter
+
   const [showLeadDetails, setShowLeadDetails] = useState(true);
 
   const [newMessage, setNewMessage] = useState("");
@@ -304,7 +305,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
         if(leadsToAssign.length === 0) return alert("Select leads manually or use the Quantity Assign feature!");
     }
 
-    if(!window.confirm(`Assign ${leadsToAssign.length} leads (${isQuantityBased ? assignDirection + ' ones' : 'selected'}) to this agent?`)) return;
+    if(!window.confirm(`Assign/Re-assign ${leadsToAssign.length} leads to this agent?`)) return;
 
     try {
         const res = await fetch(`${API_BASE_URL}/api/team/assign-chats`, {
@@ -319,25 +320,31 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
-  // 🔥 FIXED: Custom Agent Filter Logic
+  // 🔥 FILTER LOGIC (Agent + Status + Search)
   const filteredContacts = contacts
     .filter(c => {
       const contactPhone = c.phoneNumber || c.phone_number || "";
       const matchesSearch = contactPhone.includes(searchTerm);
       
-      if(userRole === 'agent') {
-          return matchesSearch;
-      }
+      if(userRole === 'agent') return matchesSearch;
       
       const matchesTab = activeTab === 'All' ? true : activeTab === 'Unassigned' ? !c.assignedTo : !!c.assignedTo;
       
+      // Agent Filter
       let matchesAgent = true;
       if (selectedAgentFilter !== 'All') {
           const cAgentId = typeof c.assignedTo === 'object' ? c.assignedTo?._id : c.assignedTo;
           matchesAgent = cAgentId === selectedAgentFilter;
       }
 
-      return matchesTab && matchesAgent && matchesSearch;
+      // Call Status Filter (Pending/Answered/No Answer)
+      let matchesStatus = true;
+      if (selectedStatusFilter !== 'All') {
+          const cStatus = c.callStatus || c.call_status || 'pending';
+          matchesStatus = cStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
+      }
+
+      return matchesTab && matchesAgent && matchesStatus && matchesSearch;
     })
     .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
 
@@ -430,30 +437,49 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                             ))}
                         </div>
                         
-                        {/* 🔥 FIXED: Agent Filter Dropdown */}
+                        {/* Agent & Status Filters */}
                         {(activeTab === 'Assigned' || activeTab === 'All') && (
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/>
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                        <option value="All">All Agents</option>
+                                        {agents.map(a => (<option key={a._id} value={a._id}>{a.name}</option>))}
+                                    </select>
                                 </div>
-                                <select 
-                                    value={selectedAgentFilter} 
-                                    onChange={(e) => setSelectedAgentFilter(e.target.value)}
-                                    className={`w-full appearance-none rounded-xl py-2 pl-9 pr-8 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}
-                                >
-                                    <option value="All">All Agents</option>
-                                    {agents.map(a => (
-                                        <option key={a._id} value={a._id}>{a.name}</option>
-                                    ))}
-                                </select>
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Tag size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                    <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                        <option value="All">All Status</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="answered">Answered</option>
+                                        <option value="reject">Reject</option>
+                                        <option value="no answer">No Answer</option>
+                                    </select>
+                                </div>
                             </div>
                         )}
                     </div>
                 )}
                 
-                <div className="relative group">
-                    <Search className={`absolute left-3 top-2.5 transition-colors ${isDarkMode ? 'text-slate-500' : 'text-gray-400'} group-focus-within:${theme.text}`} size={16}/>
-                    <input type="text" placeholder="Search number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 ${theme.ring} border border-transparent transition-all placeholder-slate-600 ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-gray-100 text-gray-900 placeholder-gray-500'}`}/>
+                {/* Search & Select All */}
+                <div className="flex items-center gap-2">
+                    {userRole !== 'agent' && (
+                        <button 
+                            onClick={() => {
+                                if (selectedIds.length === filteredContacts.length && filteredContacts.length > 0) setSelectedIds([]);
+                                else setSelectedIds(filteredContacts.map(c => c._id));
+                            }} 
+                            className={`p-2.5 rounded-xl border transition-all ${selectedIds.length === filteredContacts.length && filteredContacts.length > 0 ? `${theme.primary} text-white border-transparent` : (isDarkMode ? 'bg-[#1e293b] border-white/5 text-slate-400' : 'bg-gray-100 border-gray-200 text-gray-500')}`}
+                            title="Select All Filtered"
+                        >
+                            {selectedIds.length === filteredContacts.length && filteredContacts.length > 0 ? <CheckSquare size={16}/> : <Square size={16}/>}
+                        </button>
+                    )}
+                    <div className="relative group flex-1">
+                        <Search className={`absolute left-3 top-2.5 transition-colors ${isDarkMode ? 'text-slate-500' : 'text-gray-400'} group-focus-within:${theme.text}`} size={16}/>
+                        <input type="text" placeholder="Search number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 ${theme.ring} border border-transparent transition-all placeholder-slate-600 ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-gray-100 text-gray-900 placeholder-gray-500'}`}/>
+                    </div>
                 </div>
             </div>
             
@@ -469,9 +495,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
                 {filteredContacts.map(contact => {
-                    // 🔥 FIXED: Get Agent Name to Display
                     const assignedAgentObj = typeof contact.assignedTo === 'object' ? contact.assignedTo : agents.find(a => a._id === contact.assignedTo);
                     const displayAgentName = assignedAgentObj ? assignedAgentObj.name : 'Agent';
+                    const cStatus = contact.callStatus || contact.call_status || 'Pending';
 
                     return (
                         <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? `${theme.soft} ${theme.border} border-opacity-40 shadow-inner` : `bg-transparent border-transparent ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}`}>
@@ -492,13 +518,20 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{new Date(contact.lastMessageTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                                 </div>
                                 <p className={`text-xs truncate mb-1 ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>{contact.lastMessage || "New Lead"}</p>
-                                {contact.assignedTo ? (
-                                    <div className="flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                                        {/* 🔥 FIXED: Now shows the actual agent name */}
-                                        <span className="text-[10px] font-bold text-slate-400">{displayAgentName}</span>
-                                    </div>
-                                ) : (<span className="text-[9px] text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">UNASSIGNED</span>)}
+                                
+                                <div className="flex items-center justify-between">
+                                    {contact.assignedTo ? (
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                            <span className="text-[10px] font-bold text-slate-400">{displayAgentName}</span>
+                                        </div>
+                                    ) : (<span className="text-[9px] text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">UNASSIGNED</span>)}
+                                    
+                                    {/* Show Status Badge */}
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${cStatus.toLowerCase() === 'answered' ? 'text-emerald-500 bg-emerald-500/10' : (cStatus.toLowerCase() === 'pending' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10')}`}>
+                                        {cStatus}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     );
@@ -535,7 +568,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     <Type size={14} className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}/>
                                     <button onClick={() => adjustFontSize('up')} className={`p-1.5 rounded-md transition ${isDarkMode ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-white text-gray-500 hover:text-black'}`}><Plus size={14}/></button>
                                 </div>
-                                {/* 🔥 FIXED: Toggle button for Campaign Recap Right Panel */}
                                 {userRole !== 'agent' && (
                                     <button 
                                         onClick={() => setShowLeadDetails(!showLeadDetails)} 
@@ -594,7 +626,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                             <span className={`font-mono text-sm ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{formatTime(recordingTime)}</span>
                                             <div className="flex-1"></div>
                                             <button onClick={cancelRecording} className="p-2 text-slate-400 hover:text-red-400 transition"><Trash2 size={20}/></button>
-                                            <button onClick={stopRecording} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-500 transition shadow-lg shadow-red-500/20"><Send size={18}/></button>
+                                            <button onClick={stopRecording} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-50 transition shadow-lg shadow-red-500/20"><Send size={18}/></button>
                                         </div>
                                     ) : (
                                         <>
@@ -645,7 +677,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                         </div>
                     </div>
 
-                    {/* 🔥 FIXED: RIGHT PANEL (CAMPAIGN RECAP) for Managers */}
+                    {/* RIGHT PANEL (CAMPAIGN RECAP) for Managers */}
                     {userRole !== 'agent' && showLeadDetails && (
                         <div className={`w-[300px] shrink-0 border-l flex flex-col z-20 shadow-[-4px_0_15px_rgba(0,0,0,0.05)] animate-in slide-in-from-right-8 duration-300 ${isDarkMode ? 'bg-[#0f172a] border-white/5' : 'bg-white border-gray-200'}`}>
                             
