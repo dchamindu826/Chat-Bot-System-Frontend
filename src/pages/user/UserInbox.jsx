@@ -33,7 +33,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [showThemePicker, setShowThemePicker] = useState(false);
   const theme = THEMES[currentTheme];
 
-  const [activeTab, setActiveTab] = useState('New / Unassigned'); 
+  // 🔥 Default Tab එක 'New Chat' කරනවා
+  const [activeTab, setActiveTab] = useState('New Chat'); 
   const [searchTerm, setSearchTerm] = useState('');
   
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('All');
@@ -41,7 +42,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
   const [showLeadDetails, setShowLeadDetails] = useState(true);
 
-  // NEW CHAT & CSV IMPORT STATES
   const [showAddChatModal, setShowAddChatModal] = useState(false);
   const [addChatMethod, setAddChatMethod] = useState('manual');
   const [newChatPhone, setNewChatPhone] = useState("");
@@ -49,7 +49,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [csvFile, setCsvFile] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
 
-  // 🔥 TEMPLATE STATES
   const [showSendTemplateModal, setShowSendTemplateModal] = useState(false);
   const [approvedTemplates, setApprovedTemplates] = useState([]);
 
@@ -79,7 +78,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const CLOUD_NAME = "dyixoaldi"; 
   const UPLOAD_PRESET = "Chat Bot System"; 
 
-  // 🔥 FETCH META APPROVED TEMPLATES
   const fetchApprovedTemplates = async () => {
       try {
           const res = await fetch(`${API_BASE_URL}/api/templates`, { headers: { token: `Bearer ${token}` } });
@@ -91,7 +89,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { console.error(err); }
   };
 
-  // 🔥 SEND TEMPLATE MESSAGE
   const handleSendTemplateMessage = async (template) => {
       if(!selectedContact) return;
       setSending(true);
@@ -152,6 +149,11 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { alert("Delete failed"); }
   };
 
+  const handleSelectTemplate = (msg) => {
+      setNewMessage(msg); 
+      setShowTemplates(false); 
+  };
+
   useEffect(() => {
       if (initialSelectedContact) setSelectedContact(initialSelectedContact);
   }, [initialSelectedContact]);
@@ -198,7 +200,11 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 .then(res => res.json())
                 .then(data => { 
                     if(Array.isArray(data)) {
-                        setMessages(prev => prev.length !== data.length ? data : prev);
+                        setMessages(prev => {
+                            if (prev.length !== data.length) return data;
+                            if (prev.length > 0 && data.length > 0 && prev[prev.length-1]._id !== data[data.length-1]._id) return data;
+                            return prev;
+                        });
                     }
                 })
                 .catch(err => console.error(err));
@@ -219,10 +225,17 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, mediaPreview]);
 
-  // 🔥 HANDLE MANUAL CHAT ADD (Check Duplicates)
+  const formatPhoneNumber = (phone) => {
+      let cleaned = phone.replace(/\D/g, '');
+      if (cleaned.startsWith('0')) {
+          return '94' + cleaned.substring(1);
+      }
+      return cleaned;
+  };
+
   const handleAddNewChat = async () => {
       if(!newChatPhone) return alert("Please enter a phone number");
-      let formattedPhone = newChatPhone.replace(/\D/g, ''); 
+      let formattedPhone = formatPhoneNumber(newChatPhone);
 
       try {
           const res = await fetch(`${API_BASE_URL}/api/crm/contact/add`, {
@@ -264,12 +277,13 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           lines.forEach((line, index) => {
               if (!line.trim()) return;
               const parts = line.split(',');
-              const phone = parts[0]?.trim();
+              const rawPhone = parts[0]?.trim();
               const name = parts[1]?.trim() || '';
               
-              if (phone && /\d/.test(phone)) {
-                  if (index === 0 && phone.toLowerCase().includes('phone')) return;
-                  newContacts.push({ phoneNumber: phone, name: name });
+              if (rawPhone && /\d/.test(rawPhone)) {
+                  if (index === 0 && rawPhone.toLowerCase().includes('phone')) return;
+                  let formattedPhone = formatPhoneNumber(rawPhone);
+                  newContacts.push({ phoneNumber: formattedPhone, name: name });
               }
           });
 
@@ -341,7 +355,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
           } else {
               const errData = await res.json();
-              alert(`Message Failed: ${errData.message || 'WhatsApp 24h Window Rule might apply.'}`);
+              alert(`Message Failed: ${errData.message || 'WhatsApp 24h Window Rule might apply. Send an approved template instead.'}`);
           }
       } catch(err) { alert("Message Failed!"); } 
       finally { setSending(false); }
@@ -413,12 +427,13 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     let leadsToAssign = selectedIds;
 
     if (isQuantityBased) {
-        let sortedUnassigned = [...contacts].filter(c => !c.assignedTo);
+        // 🔥 FIX: Assign කරද්දී ගන්නේ Active Tab එකේ ඉන්න උන්ව විතරයි!
+        let sortedUnassigned = [...filteredContacts].filter(c => !c.assignedTo);
         if (assignDirection === 'newest') sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
         else sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime));
 
         const unassignedLeads = sortedUnassigned.slice(0, assignAmount).map(c => c._id);
-        if (unassignedLeads.length === 0) return alert("No unassigned leads available!");
+        if (unassignedLeads.length === 0) return alert("No unassigned leads available in this section!");
         leadsToAssign = unassignedLeads;
     } else {
         if(leadsToAssign.length === 0) return alert("Select leads manually or use the Quantity Assign feature!");
@@ -439,6 +454,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
+  // 🔥 NEW FILTER LOGIC (4 Tabs)
   const filteredContacts = contacts
     .filter(c => {
       const contactPhone = c.phoneNumber || c.phone_number || "";
@@ -446,7 +462,20 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       
       if(userRole === 'agent') return matchesSearch;
       
-      const matchesTab = activeTab === 'All' ? true : activeTab === 'New / Unassigned' ? !c.assignedTo : !!c.assignedTo;
+      let matchesTab = true;
+      const isImported = c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV';
+
+      if (activeTab === 'New Chat') {
+          // ඇත්තටම මැසේජ් ආපු, තාම Assign කරපු නැති අය
+          matchesTab = !c.assignedTo && !isImported;
+      } else if (activeTab === 'Imported') {
+          // Manual හෝ CSV වලින් දාපු, තාම Assign කරපු නැති අය
+          matchesTab = !c.assignedTo && isImported;
+      } else if (activeTab === 'Assigned') {
+          matchesTab = !!c.assignedTo;
+      } else if (activeTab === 'All') {
+          matchesTab = true;
+      }
       
       let matchesAgent = true;
       if (selectedAgentFilter !== 'All') {
@@ -553,9 +582,10 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 
                 {userRole !== 'agent' && (
                     <div className="space-y-2">
+                        {/* 🔥 4 TABS INSTEAD OF 3 */}
                         <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-[#1e293b] border-white/5' : 'bg-gray-100 border-gray-200'}`}>
-                            {['New / Unassigned', 'Assigned', 'All'].map(tab => (
-                                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}>{tab}</button>
+                            {['New Chat', 'Imported', 'Assigned', 'All'].map(tab => (
+                                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}>{tab}</button>
                             ))}
                         </div>
                         
@@ -754,7 +784,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                             <label className={`p-3 rounded-xl transition cursor-pointer self-center ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`} title="Attach File"><Paperclip size={20}/><input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*,application/pdf,application/msword,audio/*"/></label>
                                             <button onClick={() => { setShowTemplates(!showTemplates); fetchQuickReplies(); }} className="p-3 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-xl transition self-center" title="Quick Reply Templates"><Zap size={20}/></button>
                                             
-                                            {/* 🔥 NEW: SEND TEMPLATE BUTTON */}
                                             <button onClick={fetchApprovedTemplates} className="p-3 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl transition self-center" title="Send Official Template">
                                                 <LayoutTemplate size={20}/>
                                             </button>
@@ -764,7 +793,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                         </>
                                     )}
 
-                                    {/* QUICK REPLIES MODAL */}
                                     {showTemplates && (
                                         <div className={`absolute bottom-16 left-2 w-72 border rounded-2xl shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-2 fade-in ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
                                             <div className={`flex justify-between items-center mb-3 pb-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
@@ -799,7 +827,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                         </div>
                                     )}
 
-                                    {/* 🔥 NEW: OFFICIAL TEMPLATES MODAL */}
                                     {showSendTemplateModal && (
                                         <div className={`absolute bottom-16 left-12 w-80 border rounded-2xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2 fade-in ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
                                             <div className={`flex justify-between items-center mb-3 pb-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
@@ -917,7 +944,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                         <div className="space-y-4 animate-in slide-in-from-left-2 fade-in">
                             <div>
                                 <label className="text-xs text-slate-400 mb-1 block">Phone Number (with country code, no +)</label>
-                                <input type="text" placeholder="e.g. 94771234567" value={newChatPhone} onChange={(e) => setNewChatPhone(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
+                                <input type="text" placeholder="e.g. 0771234567 or 9477..." value={newChatPhone} onChange={(e) => setNewChatPhone(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
                             </div>
                             <div>
                                 <label className="text-xs text-slate-400 mb-1 block">Name (Optional)</label>

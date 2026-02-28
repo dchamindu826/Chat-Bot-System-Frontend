@@ -5,28 +5,23 @@ import { API_BASE_URL } from '../../config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const UserDashboard = () => {
-  // 🔥 State for Phase Filtering
-  const [activePhase, setActivePhase] = useState('All'); // 'All', 1, 2, 3
+  const [activePhase, setActivePhase] = useState('All'); 
   
   const [stats, setStats] = useState({ totalCalls: 0, totalMessages: 0, responseRate: 0 });
   const [report, setReport] = useState([]);
   const [loading, setLoading] = useState(false);
   const token = localStorage.getItem('token');
 
-  // 🔥 Fetch Data Function that accepts Phase
   const fetchData = async (phase) => {
     setLoading(true);
     try {
-        // Prepare Query Params
         const query = phase === 'All' ? '' : `?phase=${phase}`;
 
-        // 1. Cards Data (Backend must accept ?phase=X)
         const statsRes = await fetch(`${API_BASE_URL}/api/analytics/user-stats${query}`, { 
             headers: { token: `Bearer ${token}` } 
         });
         if(statsRes.ok) setStats(await statsRes.json());
 
-        // 2. Table Data (Backend must accept ?phase=X)
         const reportRes = await fetch(`${API_BASE_URL}/api/analytics/agent-performance${query}`, { 
             headers: { token: `Bearer ${token}` } 
         });
@@ -39,12 +34,10 @@ const UserDashboard = () => {
     }
   };
 
-  // Re-fetch when activePhase changes
   useEffect(() => {
     fetchData(activePhase);
   }, [activePhase]);
 
-  // ✅ CSV Download Function
   const downloadCSV = () => {
     if (report.length === 0) return alert("No data available to download!");
 
@@ -77,7 +70,6 @@ const UserDashboard = () => {
     <MainLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
         
-        {/* 🔥 HEADER & PHASE FILTER */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-[#1e293b]/60 p-4 rounded-3xl border border-white/5 backdrop-blur-md">
             <div>
                 <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -104,7 +96,6 @@ const UserDashboard = () => {
             </div>
         </div>
 
-        {/* 1. Top Cards Section */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <StatsCard 
                 title={activePhase === 'All' ? "Total Leads" : `Phase 0${activePhase} Leads`} 
@@ -133,9 +124,7 @@ const UserDashboard = () => {
             />
         </div>
 
-        {/* 2. Main Campaign Report Table */}
         <div className="glass-panel p-8 rounded-3xl border border-white/10 bg-[#1e293b]/60 backdrop-blur-xl relative overflow-hidden">
-            {/* Background Glow */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none"/>
 
             <div className="flex items-center justify-between mb-6 relative z-10">
@@ -196,35 +185,34 @@ const UserDashboard = () => {
             </div>
         </div>
 
-       <div className="h-[350px] glass-panel p-6 rounded-3xl border border-white/5 bg-[#1e293b]/60 backdrop-blur-xl">
-    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-        <BarChart2 size={18} className="text-slate-400"/> 
-        Visual Breakdown <span className="text-xs text-slate-500 font-normal">(Answered vs No Answer)</span>
-    </h3>
-    <ResponsiveContainer width="100%" height="85%">
-        <BarChart data={report} barSize={20}> {/* barSize එක පොඩි කළා ලස්සනට පේන්න */}
-            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-            <XAxis dataKey="agentName" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-            <Tooltip 
-                cursor={{fill: '#ffffff05'}}
-                contentStyle={{backgroundColor: '#1e293b', border: '1px solid #ffffff10', borderRadius: '12px'}} 
-            />
-            
-            {/* 🔥 වෙනස්කම මෙතන: stackId="a" අයින් කළා */}
-            <Bar dataKey="answered" name="Answered" fill="#10b981" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="noAnswer" name="No Answer" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-            
-        </BarChart>
-    </ResponsiveContainer>
-</div>
+        <div className="h-[350px] glass-panel p-6 rounded-3xl border border-white/5 bg-[#1e293b]/60 backdrop-blur-xl">
+            <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                <BarChart2 size={18} className="text-slate-400"/> 
+                Visual Breakdown <span className="text-xs text-slate-500 font-normal">(Answered vs No Answer)</span>
+            </h3>
+            {/* 🔥 FIXED: Added minHeight to fix the Recharts warning */}
+            <div style={{ minHeight: '250px', height: '85%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={report} barSize={20}> 
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                        <XAxis dataKey="agentName" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                        <Tooltip 
+                            cursor={{fill: '#ffffff05'}}
+                            contentStyle={{backgroundColor: '#1e293b', border: '1px solid #ffffff10', borderRadius: '12px'}} 
+                        />
+                        <Bar dataKey="answered" name="Answered" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="noAnswer" name="No Answer" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
 
       </div>
     </MainLayout>
   );
 };
 
-// Reusable Stats Card Component for cleaner code
 const StatsCard = ({ title, value, icon, color, isText = false }) => {
     const colors = {
         blue: "from-blue-600/20 to-blue-900/10 text-blue-400 bg-blue-500/20",
