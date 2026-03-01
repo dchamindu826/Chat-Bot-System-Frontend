@@ -33,12 +33,12 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [showThemePicker, setShowThemePicker] = useState(false);
   const theme = THEMES[currentTheme];
 
-  // 🔥 Default Tab එක 'New Chat' කරනවා
   const [activeTab, setActiveTab] = useState('New Chat'); 
   const [searchTerm, setSearchTerm] = useState('');
   
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
+  const [selectedPhaseFilter, setSelectedPhaseFilter] = useState('All'); // Added Phase Filter
 
   const [showLeadDetails, setShowLeadDetails] = useState(true);
 
@@ -427,7 +427,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     let leadsToAssign = selectedIds;
 
     if (isQuantityBased) {
-        // 🔥 FIX: Assign කරද්දී ගන්නේ Active Tab එකේ ඉන්න උන්ව විතරයි!
         let sortedUnassigned = [...filteredContacts].filter(c => !c.assignedTo);
         if (assignDirection === 'newest') sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
         else sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime));
@@ -454,7 +453,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
-  // 🔥 NEW FILTER LOGIC (4 Tabs)
   const filteredContacts = contacts
     .filter(c => {
       const contactPhone = c.phoneNumber || c.phone_number || "";
@@ -466,10 +464,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       const isImported = c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV';
 
       if (activeTab === 'New Chat') {
-          // ඇත්තටම මැසේජ් ආපු, තාම Assign කරපු නැති අය
           matchesTab = !c.assignedTo && !isImported;
       } else if (activeTab === 'Imported') {
-          // Manual හෝ CSV වලින් දාපු, තාම Assign කරපු නැති අය
           matchesTab = !c.assignedTo && isImported;
       } else if (activeTab === 'Assigned') {
           matchesTab = !!c.assignedTo;
@@ -489,7 +485,13 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           matchesStatus = cStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
       }
 
-      return matchesTab && matchesAgent && matchesStatus && matchesSearch;
+      let matchesPhase = true;
+      if (selectedPhaseFilter !== 'All') {
+          const cPhase = c.phase || c.status || 1;
+          matchesPhase = String(cPhase) === selectedPhaseFilter;
+      }
+
+      return matchesTab && matchesAgent && matchesStatus && matchesPhase && matchesSearch;
     })
     .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
 
@@ -582,7 +584,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 
                 {userRole !== 'agent' && (
                     <div className="space-y-2">
-                        {/* 🔥 4 TABS INSTEAD OF 3 */}
                         <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-[#1e293b] border-white/5' : 'bg-gray-100 border-gray-200'}`}>
                             {['New Chat', 'Imported', 'Assigned', 'All'].map(tab => (
                                 <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}>{tab}</button>
@@ -606,6 +607,16 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                         <option value="answered">Answered</option>
                                         <option value="reject">Reject</option>
                                         <option value="no answer">No Answer</option>
+                                    </select>
+                                </div>
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><ClipboardList size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                    <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                        <option value="All">All Phases</option>
+                                        <option value="1">Phase 1</option>
+                                        <option value="2">Phase 2</option>
+                                        <option value="3">Phase 3</option>
+                                        <option value="4">Phase 4</option>
                                     </select>
                                 </div>
                             </div>
@@ -793,6 +804,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                         </>
                                     )}
 
+                                    {/* QUICK REPLIES MODAL */}
                                     {showTemplates && (
                                         <div className={`absolute bottom-16 left-2 w-72 border rounded-2xl shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-2 fade-in ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
                                             <div className={`flex justify-between items-center mb-3 pb-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
@@ -827,6 +839,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                         </div>
                                     )}
 
+                                    {/* 🔥 NEW: OFFICIAL TEMPLATES MODAL */}
                                     {showSendTemplateModal && (
                                         <div className={`absolute bottom-16 left-12 w-80 border rounded-2xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2 fade-in ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
                                             <div className={`flex justify-between items-center mb-3 pb-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
