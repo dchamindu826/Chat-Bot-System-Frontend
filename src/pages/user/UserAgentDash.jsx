@@ -17,6 +17,9 @@ const UserAgentDash = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // 🔥 NEW: Save Button ekata adala state eka
+  const [pendingSaves, setPendingSaves] = useState(new Set());
+
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const userId = localStorage.getItem('userId');
@@ -31,9 +34,6 @@ const UserAgentDash = () => {
         });
         if (res.ok) {
             const data = await res.json();
-            
-            // 🔥 FIXED: Backend එකෙන් එද්දිම Agent ට අදාළ Contacts විතරක් එන නිසා, 
-            // Frontend එකේ ආයෙත් ID එකෙන් Filter කරන්න ඕනේ නෑ! කෙලින්ම Data ටික ගන්නවා.
             const processedLeads = data.map(c => ({...c, phase: c.phase || 1}));
             setContacts(processedLeads);
         }
@@ -43,8 +43,8 @@ const UserAgentDash = () => {
 
   useEffect(() => { fetchMyContacts(); }, []);
 
-  // --- 2. LOGIC: UPDATE STATUS & AUTO-MOVE PHASE ---
-  const handleUpdateRow = async (id, field, value) => {
+  // --- 2. LOGIC: UPDATE STATUS Lcoally ---
+  const handleUpdateRow = (id, field, value) => {
       const currentContact = contacts.find(c => c._id === id);
       let updatedFields = { ...currentContact, [field]: value };
 
@@ -58,7 +58,7 @@ const UserAgentDash = () => {
                   updatedFields.callStatus = 'Pending';
                   updatedFields.attemptCount = (parseInt(currentContact.attemptCount || 0) + 1).toString();
                   updatedFields.remarks = `${updatedFields.remarks || ''} [P${currentPhase}: No Answer]`.trim();
-                  alert(`Moved to Phase 0${currentPhase + 1} 🚀`);
+                  alert(`Phase updated locally. Click 'Save' to confirm! 🚀`);
               }
           } else {
               alert("Phase 03 Ended. Marked as No Answer.");
@@ -66,22 +66,41 @@ const UserAgentDash = () => {
       }
 
       setContacts(prev => prev.map(c => c._id === id ? { ...c, ...updatedFields } : c));
+      // 🔥 Pending list ekata add karanawa
+      setPendingSaves(prev => new Set(prev).add(id));
+  };
+
+  // 🔥 NEW: SAVE TO DATABASE FUNCTION
+  const handleSaveRow = async (id) => {
+      const contactToSave = contacts.find(c => c._id === id);
+      if(!contactToSave) return;
 
       try {
-        await fetch(`${API_BASE_URL}/api/crm/contact/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/api/crm/contact/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
             body: JSON.stringify({ 
-                callStatus: updatedFields.callStatus,
-                attemptMethod: updatedFields.attemptMethod,
-                attemptCount: updatedFields.attemptCount,
-                remarks: updatedFields.remarks,
-                phase: updatedFields.phase
+                callStatus: contactToSave.callStatus,
+                attemptMethod: contactToSave.attemptMethod,
+                attemptCount: contactToSave.attemptCount,
+                remarks: contactToSave.remarks,
+                phase: contactToSave.phase
             })
         });
+
+        if(res.ok) {
+            setPendingSaves(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+            // Optional alert: alert("Saved Successfully!");
+        } else {
+            alert("Failed to save!");
+        }
       } catch(err) {
           console.error("Save failed", err);
-          fetchMyContacts(); 
+          alert("Failed to save!");
       }
   };
 
@@ -256,11 +275,12 @@ const UserAgentDash = () => {
                                     <th className="p-4 text-center">Chat</th>
                                     <th className="p-4 text-center w-40">Status</th>
                                     <th className="p-4 text-left w-1/4">Remark</th>
+                                    <th className="p-4 text-center">Action</th> {/* 🔥 NEW COLUMN */}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {currentItems.length === 0 ? (
-                                    <tr><td colSpan="8" className="p-10 text-center text-slate-500">No leads found.</td></tr>
+                                    <tr><td colSpan="9" className="p-10 text-center text-slate-500">No leads found.</td></tr>
                                 ) : currentItems.map((contact, index) => (
                                     <tr key={contact._id} className="hover:bg-white/[0.02] transition-colors">
                                         <td className="p-4 text-slate-500 text-left">{(currentPage - 1) * itemsPerPage + index + 1}</td>
@@ -327,6 +347,21 @@ const UserAgentDash = () => {
                                                 onChange={(e) => handleUpdateRow(contact._id, 'remarks', e.target.value)} 
                                                 className="bg-transparent border-b border-white/10 w-full outline-none text-slate-300 text-sm py-1 focus:border-indigo-500 transition-colors placeholder-slate-700"
                                             />
+                                        </td>
+
+                                        {/* 🔥 NEW: SAVE BUTTON */}
+                                        <td className="p-4 text-center">
+                                            <button 
+                                                onClick={() => handleSaveRow(contact._id)}
+                                                disabled={!pendingSaves.has(contact._id)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-md ${
+                                                    pendingSaves.has(contact._id) 
+                                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse' 
+                                                    : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                                                }`}
+                                            >
+                                                {pendingSaves.has(contact._id) ? 'Save' : 'Saved'}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}

@@ -180,6 +180,22 @@ const UserDashboard = () => {
                                 </tr>
                             ))}
                         </tbody>
+                        {/* 🔥 NEW: TOTALS ROW */}
+                        <tfoot className="bg-black/40 border-t border-white/10 font-bold text-white">
+                            <tr>
+                                <td className="p-5 text-right uppercase tracking-wider text-slate-400 text-xs">Total Overall:</td>
+                                <td className="p-5 text-center text-blue-400">{report.reduce((sum, r) => sum + (r.totalAllocated || 0), 0)}</td>
+                                <td className="p-5 text-center text-emerald-400">{report.reduce((sum, r) => sum + (r.answered || 0), 0)}</td>
+                                <td className="p-5 text-center text-amber-400">{report.reduce((sum, r) => sum + (r.noAnswer || 0), 0)}</td>
+                                <td className="p-5 text-center text-red-400">{report.reduce((sum, r) => sum + (r.reject || 0), 0)}</td>
+                                <td className="p-5 text-center text-indigo-400">
+                                    {report.reduce((sum, r) => sum + (r.totalAllocated || 0), 0) > 0 
+                                        ? ((report.reduce((sum, r) => sum + (r.answered || 0), 0) / report.reduce((sum, r) => sum + (r.totalAllocated || 0), 0)) * 100).toFixed(1) 
+                                        : 0}%
+                                </td>
+                                <td className="p-5 text-center text-orange-400">{report.reduce((sum, r) => sum + (r.toCover || 0), 0)}</td>
+                            </tr>
+                        </tfoot>
                     </table>
                 )}
             </div>
@@ -190,7 +206,6 @@ const UserDashboard = () => {
                 <BarChart2 size={18} className="text-slate-400"/> 
                 Visual Breakdown <span className="text-xs text-slate-500 font-normal">(Answered vs No Answer)</span>
             </h3>
-            {/* 🔥 FIXED: Added minHeight to fix the Recharts warning */}
             <div style={{ minHeight: '250px', height: '85%' }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={report} barSize={20}> 

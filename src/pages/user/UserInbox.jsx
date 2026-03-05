@@ -428,8 +428,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
     if (isQuantityBased) {
         let sortedUnassigned = [...filteredContacts].filter(c => !c.assignedTo);
-        if (assignDirection === 'newest') sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
-        else sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime) - new Date(b.lastMessageTime));
+        if (assignDirection === 'newest') {sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
+   } else {sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime || 0) - new Date(b.lastMessageTime || 0));
+     } 
 
         const unassignedLeads = sortedUnassigned.slice(0, assignAmount).map(c => c._id);
         if (unassignedLeads.length === 0) return alert("No unassigned leads available in this section!");
@@ -583,46 +584,69 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 </div>
                 
                 {userRole !== 'agent' && (
-                    <div className="space-y-2">
-                        <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-[#1e293b] border-white/5' : 'bg-gray-100 border-gray-200'}`}>
-                            {['New Chat', 'Imported', 'Assigned', 'All'].map(tab => (
-                                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}>{tab}</button>
-                            ))}
-                        </div>
-                        
-                        {(activeTab === 'Assigned' || activeTab === 'All') && (
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
-                                        <option value="All">All Agents</option>
-                                        {agents.map(a => (<option key={a._id} value={a._id}>{a.name}</option>))}
-                                    </select>
-                                </div>
-                                <div className="relative flex-1">
-                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Tag size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                    <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
-                                        <option value="All">All Status</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="answered">Answered</option>
-                                        <option value="reject">Reject</option>
-                                        <option value="no answer">No Answer</option>
-                                    </select>
-                                </div>
-                                <div className="relative flex-1">
-                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><ClipboardList size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                    <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
-                                        <option value="All">All Phases</option>
-                                        <option value="1">Phase 1</option>
-                                        <option value="2">Phase 2</option>
-                                        <option value="3">Phase 3</option>
-                                        <option value="4">Phase 4</option>
-                                    </select>
-                                </div>
-                            </div>
+    <div className="space-y-2">
+        <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-[#1e293b] border-white/5' : 'bg-gray-100 border-gray-200'}`}>
+            {['New Chat', 'Imported', 'Assigned', 'All'].map(tab => {
+                // 🔥 Unread counts calculate kirima
+                let badgeCount = 0;
+                if (tab === 'New Chat') {
+                    badgeCount = contacts.filter(c => !c.assignedTo && c.lastMessage !== 'Created Manually' && c.lastMessage !== 'Imported via CSV' && c.unreadCount > 0).length;
+                } else if (tab === 'Assigned') {
+                    badgeCount = contacts.filter(c => c.assignedTo && c.unreadCount > 0).length;
+                } else if (tab === 'All') {
+                    badgeCount = contacts.filter(c => c.unreadCount > 0).length;
+                }
+
+                return (
+                    <button 
+                        key={tab} 
+                        onClick={() => setActiveTab(tab)} 
+                        className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}
+                    >
+                        {tab}
+                        {badgeCount > 0 && (
+                            <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">
+                                {badgeCount}
+                            </span>
                         )}
-                    </div>
-                )}
+                    </button>
+                );
+            })}
+        </div>
+        
+        {(activeTab === 'Assigned' || activeTab === 'All') && (
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                        <option value="All">All Agents</option>
+                        {agents.map(a => (<option key={a._id} value={a._id}>{a.name}</option>))}
+                    </select>
+                </div>
+                <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Tag size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                    <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                        <option value="All">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="answered">Answered</option>
+                        <option value="reject">Reject</option>
+                        <option value="no answer">No Answer</option>
+                    </select>
+                </div>
+                <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><ClipboardList size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                    <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                        <option value="All">All Phases</option>
+                        <option value="1">Phase 1</option>
+                        <option value="2">Phase 2</option>
+                        <option value="3">Phase 3</option>
+                        <option value="4">Phase 4</option>
+                    </select>
+                </div>
+            </div>
+        )}
+    </div>
+)}
                 
                 <div className="flex items-center gap-2">
                     {userRole !== 'agent' && (
@@ -1000,7 +1024,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                 <div className="space-y-3">
                                     <p className="text-xs text-slate-400">Select amount and direction:</p>
                                     <div className="flex items-center gap-2">
-                                        <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(parseInt(e.target.value) || 1)} className={`w-16 border rounded-lg p-2 text-center text-sm focus:outline-none focus:border-amber-500 ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'}`}/>
+                                        <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(Math.max(1, parseInt(e.target.value) || 1))} className={`w-16 border rounded-lg p-2 text-center text-sm focus:outline-none focus:border-amber-500 ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'}`}/>
                                         <div className={`flex-1 flex p-1 rounded-lg border ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
                                             <button onClick={() => setAssignDirection('newest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'newest' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-black'}`}>
                                                 <ArrowUp size={12}/> Newest (Top)
