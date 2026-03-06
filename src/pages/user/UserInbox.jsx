@@ -239,9 +239,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   };
 
   useEffect(() => { 
-      loadData(); 
-      const interval = setInterval(() => {
+      loadData(); // Mulinma eka parak load karanawa
+      
+      // 1. Contacts la load wena eka thathpara 15kata sarayak (Lag eka adu karanna)
+      const contactInterval = setInterval(() => {
           loadData();
+      }, 15000);
+
+      // 2. Chat Messages tika witharak thathpara 3n 3ta load karanawa (Smooth wenna)
+      const msgInterval = setInterval(() => {
           if (selectedContact) {
               fetch(`${API_BASE_URL}/api/messages/${selectedContact._id}`, { headers: { token: `Bearer ${token}` } })
                 .then(res => res.json())
@@ -257,7 +263,11 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 .catch(err => console.error(err));
           }
       }, 3000); 
-      return () => clearInterval(interval);
+
+      return () => {
+          clearInterval(contactInterval);
+          clearInterval(msgInterval);
+      };
   }, [selectedContact, token]);
 
   useEffect(() => {
