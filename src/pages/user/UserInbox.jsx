@@ -10,13 +10,6 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
-const THEMES = {
-  slate:   { name: 'Clean',   primary: 'bg-slate-500',   hover: 'hover:bg-slate-400',   text: 'text-slate-300',   border: 'border-slate-500',   soft: 'bg-slate-700/30',   ring: 'focus:ring-slate-400', badge: 'bg-white text-black', bubbleMe: 'bg-slate-600', bubbleYou: 'bg-[#1e293b]' },
-  emerald: { name: 'Mint',    primary: 'bg-emerald-400', hover: 'hover:bg-emerald-300', text: 'text-emerald-400', border: 'border-emerald-400/50', soft: 'bg-emerald-400/10', ring: 'focus:ring-emerald-400', badge: 'bg-emerald-400 text-white', bubbleMe: 'bg-emerald-500', bubbleYou: 'bg-[#1e293b]' },
-  indigo:  { name: 'Ocean',   primary: 'bg-indigo-500',  hover: 'hover:bg-indigo-400',  text: 'text-indigo-400',  border: 'border-indigo-500/50',  soft: 'bg-indigo-500/10',  ring: 'focus:ring-indigo-400', badge: 'bg-indigo-500 text-white', bubbleMe: 'bg-indigo-600', bubbleYou: 'bg-[#1e293b]' },
-  rose:    { name: 'Blush',   primary: 'bg-rose-500',    hover: 'hover:bg-rose-400',    text: 'text-rose-400',    border: 'border-rose-500/50',    soft: 'bg-rose-500/10',    ring: 'focus:ring-rose-400', badge: 'bg-rose-500 text-white', bubbleMe: 'bg-rose-600', bubbleYou: 'bg-[#1e293b]' },
-};
-
 const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
 
 const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
@@ -26,12 +19,21 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]); 
   
-  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('chatTheme') || 'slate');
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('chatDarkMode') !== 'false');
-
   const [fontIndex, setFontIndex] = useState(1);
   const [showThemePicker, setShowThemePicker] = useState(false);
-  const theme = THEMES[currentTheme];
+
+  // 🔥 NEW: Custom Colors States
+  const [chatBgColor, setChatBgColor] = useState(() => localStorage.getItem('chatBgColor') || '#0b1221');
+  const [senderColor, setSenderColor] = useState(() => localStorage.getItem('senderColor') || '#10b981'); 
+  const [receiverColor, setReceiverColor] = useState(() => localStorage.getItem('receiverColor') || '#1e293b'); 
+
+  // Colors වෙනස් වෙද්දි LocalStorage එකට Save කිරීම
+  useEffect(() => {
+      localStorage.setItem('chatBgColor', chatBgColor);
+      localStorage.setItem('senderColor', senderColor);
+      localStorage.setItem('receiverColor', receiverColor);
+  }, [chatBgColor, senderColor, receiverColor]);
 
   const [activeTab, setActiveTab] = useState('New Chat'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,9 +116,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               setMessages(prev => [...prev, sentMsg]);
               setShowSendTemplateModal(false);
               setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: `Sent Template: ${template.name}`, lastMessageTime: new Date().toISOString() } : c));
-              alert("Template Sent Successfully!");
-          } else {
-              alert("Failed to send template. Check Meta settings.");
           }
       } catch(err) { alert("Message Failed!"); } 
       finally { setSending(false); }
@@ -204,12 +203,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       if (initialSelectedContact) setSelectedContact(initialSelectedContact);
   }, [initialSelectedContact]);
 
-  const handleThemeChange = (colorKey) => {
-      setCurrentTheme(colorKey);
-      localStorage.setItem('chatTheme', colorKey);
-      setShowThemePicker(false);
-  };
-
   const toggleDarkMode = () => {
     setIsDarkMode(prev => {
         const newVal = !prev;
@@ -237,7 +230,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { console.error(err); }
   };
 
-  // 🔥 FIX FOR TYPING LAG: Reduced contact fetching frequency to 15 seconds
   useEffect(() => { 
       loadData(); 
       const contactInterval = setInterval(() => {
@@ -247,7 +239,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       return () => clearInterval(contactInterval);
   }, [token]);
 
-  // 🔥 FIX FOR TYPING LAG: Messages only fetch every 3 seconds for the active chat
   useEffect(() => {
       let msgInterval;
       if (selectedContact) {
@@ -308,8 +299,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               setShowAddChatModal(false);
               setNewChatPhone("");
               setNewChatName("");
-          } else {
-              alert("Failed to create chat");
           }
       } catch(err) { console.error(err); }
   };
@@ -353,19 +342,13 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                   const addedContacts = await res.json();
                   if (Array.isArray(addedContacts) && addedContacts.length > 0) {
                       setContacts(prev => [...addedContacts, ...prev]);
-                      alert(`Successfully imported ${addedContacts.length} new contacts! (Duplicates ignored)`);
-                  } else {
-                      const data = await res.json();
-                      alert(data.message || "No new contacts were added. All numbers might already exist.");
+                      alert(`Successfully imported ${addedContacts.length} new contacts!`);
                   }
                   setShowAddChatModal(false);
                   setCsvFile(null);
-              } else {
-                  alert("Failed to import CSV.");
               }
           } catch (err) {
               console.error(err);
-              alert("Error importing CSV");
           } finally {
               setIsImporting(false);
           }
@@ -390,7 +373,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             type: typeToSend,
             mediaUrl: mediaToSend,
             replyToMessageId: replyingTo ? replyingTo.whatsapp_message_id : null,
-            // 🔥 NEW: Reply කරන පරණ මැසේජ් එකේ වචන ටික Backend එකට යවනවා UI එකේ පේන්න
             replyContext: replyingTo ? (replyingTo.text || replyingTo.content || 'Media/Attachment') : null 
           };
 
@@ -408,8 +390,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               setReplyingTo(null); 
               setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
           } else {
-              const errData = await res.json();
-              alert(`Message Failed: ${errData.message || 'WhatsApp 24h Window Rule might apply.'}`);
+              alert(`Message Failed: WhatsApp 24h Window Rule might apply.`);
           }
       } catch(err) { alert("Message Failed!"); } 
       finally { setSending(false); }
@@ -508,7 +489,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
-  // 🔥 FIX FOR TYPING LAG: Filter & Sort වෙන එකත් Cache කරනවා. එතකොට ටයිප් කරද්දි මේක ලෝඩ් වෙන්නෙ නෑ.
   const filteredContacts = useMemo(() => {
     return contacts
       .filter(c => {
@@ -564,8 +544,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     return (
         <div className="flex flex-col">
             {msg.replyContext && (
-                <div className={`mb-2 p-2.5 rounded-lg border-l-4 border-emerald-500 opacity-90 text-[11px] font-medium truncate ${isMe ? 'bg-black/20 text-slate-300' : (isDarkMode ? 'bg-black/30 text-slate-400' : 'bg-gray-100 text-gray-500')}`}>
-                    <span className="text-emerald-500 font-bold mr-2">Replied to:</span>
+                <div className={`mb-2 p-2.5 rounded-lg border-l-4 opacity-90 text-[11px] font-medium truncate ${isMe ? 'bg-black/20 text-slate-300 border-white/30' : (isDarkMode ? 'bg-black/30 text-slate-400 border-white/20' : 'bg-gray-100 text-gray-500 border-gray-300')}`}>
+                    <span className="font-bold mr-2 opacity-70">Replied to:</span>
                     {msg.replyContext}
                 </div>
             )}
@@ -580,7 +560,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                     {msg.type === 'video' && <video controls src={mediaUrl} className="w-full max-h-[350px] rounded-lg bg-black" />}
                     {msg.type === 'audio' && (
                         <div className={`flex items-center gap-3 p-3 rounded-xl border min-w-[250px] ${isDarkMode ? 'bg-black/30 border-white/10' : 'bg-gray-100 border-gray-200'}`}>
-                            <div className={`w-10 h-10 ${theme.primary} rounded-full flex items-center justify-center text-white shrink-0 shadow-lg`}><Play size={18} fill="currentColor"/></div>
+                            <div className={`w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white shrink-0 shadow-lg`}><Play size={18} fill="currentColor"/></div>
                             <div className="flex-1"><audio controls src={mediaUrl} className="w-full h-8 opacity-80" /></div>
                         </div>
                     )}
@@ -613,19 +593,18 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     );
   };
 
-  // 🔥 FIX FOR TYPING LAG: Memoized Contacts List - මේක තමයි ලොකුම වෙනස. ටයිප් කරද්දි මේක ලෝඩ් වෙන්නේ නෑ!
-          const renderedContactsList = useMemo(() => {
-          return filteredContacts.slice(0, 50).map(contact => { // 🔥 මෙන්න මෙතන .slice(0, 50) කියන කෑල්ල එකතු කරන්න
+  const renderedContactsList = useMemo(() => {
+      return filteredContacts.slice(0, 50).map(contact => {
           const assignedAgentObj = typeof contact.assignedTo === 'object' ? contact.assignedTo : agents.find(a => a._id === contact.assignedTo);
           const displayAgentName = assignedAgentObj ? assignedAgentObj.name : 'Agent';
           const cStatus = contact.callStatus || contact.call_status || 'Pending';
 
           return (
-              <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? `${theme.soft} ${theme.border} border-opacity-40 shadow-inner` : `bg-transparent border-transparent ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}`}>
+              <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? `bg-white/10 border-white/20 shadow-inner` : `bg-transparent border-transparent ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}`}>
                   {userRole !== 'agent' && (
-                      <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(contact._id) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(contact._id) ? setSelectedIds(selectedIds.filter(id => id !== contact._id)) : setSelectedIds([...selectedIds, contact._id]) }}>{selectedIds.includes(contact._id) ? <CheckSquare className={`${theme.text} bg-[#0f172a] rounded`} size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
+                      <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(contact._id) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(contact._id) ? setSelectedIds(selectedIds.filter(id => id !== contact._id)) : setSelectedIds([...selectedIds, contact._id]) }}>{selectedIds.includes(contact._id) ? <CheckSquare className={`text-white bg-[#0f172a] rounded`} size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
                   )}
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${contact.assignedTo ? theme.primary : 'bg-slate-700'}`}>{contact.phoneNumber?.slice(-2) || "N"}</div>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${contact.assignedTo ? 'bg-indigo-500' : 'bg-slate-700'}`}>{contact.phoneNumber?.slice(-2) || "N"}</div>
                   <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
                           <div className="flex items-center gap-2">
@@ -656,54 +635,59 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               </div>
           );
       });
-  }, [filteredContacts, selectedContact?._id, selectedIds, isDarkMode, theme, agents, userRole]);
+  }, [filteredContacts, selectedContact?._id, selectedIds, isDarkMode, agents, userRole]);
 
-  // 🔥 FIX FOR TYPING LAG: Memoized Messages List
+  // 🔥 CUSTOM COLORS APPLIED TO MESSAGES
   const renderedMessagesList = useMemo(() => {
-      return messages.map((msg, index) => (
-          <div key={index} className={`flex items-center group gap-2 ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
-              
-              {/* INCOMING MESSAGES (Customer) */}
-              {(msg.direction !== 'outbound' && msg.sender !== 'me') && (
-                  <>
-                      <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${isDarkMode ? theme.bubbleYou : 'bg-white'} ${isDarkMode ? 'text-slate-200' : 'text-gray-800'} rounded-tl-none ${isDarkMode ? 'border-white/5' : 'border-gray-200'}`}>
-                          {renderMessageContent(msg)}
-                          <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-                              {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
-                          </div>
-                      </div>
+      return messages.map((msg, index) => {
+          const isMe = msg.direction === 'outbound' || msg.sender === 'me';
+          return (
+            <div key={index} className={`flex items-center group gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                
+                {!isMe && (
+                    <>
+                        <div 
+                            className={`max-w-[75%] p-4 rounded-2xl shadow-sm border ${isDarkMode ? 'text-slate-200 border-white/5' : 'text-gray-800 border-gray-200'} rounded-tl-none`}
+                            style={{ backgroundColor: receiverColor }} // 🔥 Custom Receiver Color
+                        >
+                            {renderMessageContent(msg)}
+                            <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-400/70' : 'text-gray-500/70'}`}>
+                                {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                            </div>
+                        </div>
 
-                      {/* Reply Button (Hover කලාම පේනවා) */}
-                      {msg.whatsapp_message_id && (
-                          <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
-                              <Reply size={14} />
-                          </button>
-                      )}
-                  </>
-              )}
+                        {msg.whatsapp_message_id && (
+                            <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-white/20' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}>
+                                <Reply size={14} />
+                            </button>
+                        )}
+                    </>
+                )}
 
-              {/* OUTBOUND MESSAGES (Agent/Me) */}
-              {(msg.direction === 'outbound' || msg.sender === 'me') && (
-                  <>
-                      {/* Reply Button (Hover කලාම පේනවා) */}
-                      {msg.whatsapp_message_id && (
-                          <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
-                              <Reply size={14} />
-                          </button>
-                      )}
+                {isMe && (
+                    <>
+                        {msg.whatsapp_message_id && (
+                            <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-white/20' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}>
+                                <Reply size={14} />
+                            </button>
+                        )}
 
-                      <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${theme.bubbleMe} text-white rounded-tr-none ${isDarkMode ? 'border-white/10' : 'border-transparent'}`}>
-                          {renderMessageContent(msg)}
-                          <div className="flex items-center justify-end gap-1 mt-1.5 text-[10px] text-white/70">
-                              {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
-                              <CheckCheck size={12}/>
-                          </div>
-                      </div>
-                  </>
-              )}
-          </div>
-      ));
-  }, [messages, isDarkMode, theme, fontIndex]);
+                        <div 
+                            className={`max-w-[75%] p-4 rounded-2xl shadow-sm border text-white rounded-tr-none ${isDarkMode ? 'border-white/10' : 'border-transparent'}`}
+                            style={{ backgroundColor: senderColor }} // 🔥 Custom Sender Color
+                        >
+                            {renderMessageContent(msg)}
+                            <div className="flex items-center justify-end gap-1 mt-1.5 text-[10px] text-white/70">
+                                {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                                <CheckCheck size={12}/>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+          )
+      });
+  }, [messages, isDarkMode, fontIndex, senderColor, receiverColor]);
 
   const content = (
       <div className={`flex h-full rounded-3xl overflow-hidden shadow-2xl relative transition-colors duration-300 border ${isDarkMode ? 'bg-[#0B1120] border-white/10' : 'bg-white border-gray-200'}`}>
@@ -713,27 +697,43 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             <div className={`p-4 border-b space-y-4 ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
                 <div className="flex justify-between items-center">
                     <h2 className={`text-xl font-bold tracking-tight flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                        <MessageSquare className={theme.text}/> Inbox
+                        <MessageSquare className="text-indigo-400"/> Inbox
                     </h2>
                     <div className="flex gap-2">
                          <button onClick={toggleDarkMode} className={`p-2 rounded-lg transition ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                             {isDarkMode ? <Sun size={16}/> : <Moon size={16}/>}
                         </button>
+                        
+                        {/* 🔥 NEW: CUSTOM COLOR PICKER */}
                         <div className="relative">
                             <button onClick={() => setShowThemePicker(!showThemePicker)} className={`p-2 rounded-lg transition ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><Palette size={16}/></button>
                             {showThemePicker && (
-                                <div className={`absolute top-10 right-0 border rounded-xl p-2 z-50 shadow-xl flex flex-col gap-1 w-32 animate-in fade-in zoom-in-95 ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
-                                    {Object.keys(THEMES).map((key) => (
-                                        <button key={key} onClick={() => handleThemeChange(key)} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-bold transition ${currentTheme === key ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-900') : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                                            <div className={`w-3 h-3 rounded-full ${THEMES[key].primary}`}></div> {THEMES[key].name}
-                                        </button>
-                                    ))}
+                                <div className={`absolute top-10 right-0 border rounded-xl p-4 z-50 shadow-2xl flex flex-col gap-3 w-56 animate-in fade-in zoom-in-95 ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
+                                    <h4 className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Customize Colors</h4>
+                                    
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-400">Chat Background</span>
+                                        <input type="color" value={chatBgColor} onChange={(e) => setChatBgColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"/>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-400">My Messages (Sender)</span>
+                                        <input type="color" value={senderColor} onChange={(e) => setSenderColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"/>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-400">Customer Messages</span>
+                                        <input type="color" value={receiverColor} onChange={(e) => setReceiverColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"/>
+                                    </div>
+                                    
+                                    <button onClick={() => {
+                                        setChatBgColor('#0b1221'); setSenderColor('#10b981'); setReceiverColor('#1e293b');
+                                    }} className="mt-2 w-full py-1 text-[10px] bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition">Reset to Default</button>
                                 </div>
                             )}
                         </div>
+
                         <button onClick={loadData} className={`p-2 rounded-lg transition ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><RefreshCw size={16}/></button>
                         {userRole !== 'agent' && (
-                             <button onClick={() => setShowAssignModal(true)} className={`p-2 ${theme.soft} hover:${theme.primary} text-white rounded-lg transition`} title="Bulk Assign">
+                             <button onClick={() => setShowAssignModal(true)} className={`p-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-lg transition`} title="Bulk Assign">
                                 <Zap size={16} />
                              </button>
                         )}
@@ -756,7 +756,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     <button 
                                         key={tab} 
                                         onClick={() => setActiveTab(tab)} 
-                                        className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}
+                                        className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `bg-indigo-500 text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}
                                     >
                                         {tab}
                                         {badgeCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">{badgeCount}</span>}
@@ -769,14 +769,14 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
                                         <option value="All">All Agents</option>
                                         {agents.map(a => (<option key={a._id} value={a._id}>{a.name}</option>))}
                                     </select>
                                 </div>
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Tag size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                    <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                    <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
                                         <option value="All">All Status</option>
                                         <option value="pending">Pending</option>
                                         <option value="answered">Answered</option>
@@ -786,7 +786,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                 </div>
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><ClipboardList size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                    <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                    <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
                                         <option value="All">All Phases</option>
                                         <option value="1">Phase 1</option>
                                         <option value="2">Phase 2</option>
@@ -806,15 +806,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                 if (selectedIds.length === filteredContacts.length && filteredContacts.length > 0) setSelectedIds([]);
                                 else setSelectedIds(filteredContacts.map(c => c._id));
                             }} 
-                            className={`p-2.5 rounded-xl border transition-all ${selectedIds.length === filteredContacts.length && filteredContacts.length > 0 ? `${theme.primary} text-white border-transparent` : (isDarkMode ? 'bg-[#1e293b] border-white/5 text-slate-400' : 'bg-gray-100 border-gray-200 text-gray-500')}`}
+                            className={`p-2.5 rounded-xl border transition-all ${selectedIds.length === filteredContacts.length && filteredContacts.length > 0 ? `bg-indigo-500 text-white border-transparent` : (isDarkMode ? 'bg-[#1e293b] border-white/5 text-slate-400' : 'bg-gray-100 border-gray-200 text-gray-500')}`}
                             title="Select All Filtered"
                         >
                             {selectedIds.length === filteredContacts.length && filteredContacts.length > 0 ? <CheckSquare size={16}/> : <Square size={16}/>}
                         </button>
                     )}
                     <div className="relative group flex-1">
-                        <Search className={`absolute left-3 top-2.5 transition-colors ${isDarkMode ? 'text-slate-500' : 'text-gray-400'} group-focus-within:${theme.text}`} size={16}/>
-                        <input type="text" placeholder="Search number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 ${theme.ring} border border-transparent transition-all placeholder-slate-600 ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-gray-100 text-gray-900 placeholder-gray-500'}`}/>
+                        <Search className={`absolute left-3 top-2.5 transition-colors ${isDarkMode ? 'text-slate-500' : 'text-gray-400'} group-focus-within:text-indigo-400`} size={16}/>
+                        <input type="text" placeholder="Search number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400 border border-transparent transition-all placeholder-slate-600 ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-gray-100 text-gray-900 placeholder-gray-500'}`}/>
                     </div>
                     <button onClick={() => setShowAddChatModal(true)} className={`p-2.5 rounded-xl border transition-all ${isDarkMode ? 'bg-[#1e293b] border-white/5 text-emerald-400 hover:text-emerald-300 hover:bg-white/5' : 'bg-gray-100 border-gray-200 text-emerald-600 hover:text-emerald-700 hover:bg-gray-200'}`} title="Start New Direct Chat">
                         <MessageSquarePlus size={16}/>
@@ -823,31 +823,31 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             </div>
             
             {selectedIds.length > 0 && (
-                <div className={`${theme.soft} border-b ${theme.border} border-opacity-30 p-2 flex justify-between items-center animate-in slide-in-from-top-2`}>
-                    <span className={`${theme.text} text-xs font-bold ml-2`}>{selectedIds.length} Selected</span>
+                <div className={`bg-indigo-500/10 border-b border-indigo-500/30 p-2 flex justify-between items-center animate-in slide-in-from-top-2`}>
+                    <span className={`text-indigo-400 text-xs font-bold ml-2`}>{selectedIds.length} Selected</span>
                     <div className="flex gap-2">
                         <button onClick={() => setSelectedIds([])} className="p-1.5 hover:bg-white/10 rounded-lg text-slate-400"><X size={14}/></button>
-                        <button onClick={() => setShowAssignModal(true)} className={`${theme.primary} ${theme.hover} text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-2 transition shadow-lg`}>Assign <UserPlus size={12}/></button>
+                        <button onClick={() => setShowAssignModal(true)} className={`bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-2 transition shadow-lg`}>Assign <UserPlus size={12}/></button>
                     </div>
                 </div>
             )}
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                {/* 🔥 RENDERING MEMOIZED CONTACTS LIST */}
                 {renderedContactsList}
             </div>
         </div>
 
-        {/* MAIN AREA */}
-        <div className={`flex-1 flex overflow-hidden relative transition-colors duration-300 ${isDarkMode ? 'bg-[#0b1221]' : 'bg-[#efeae2]'}`}>
-            {!isDarkMode && <div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{ backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")' }}></div>}
-
+        {/* MAIN AREA - 🔥 NEW: CUSTOM CHAT BACKGROUND APPLIED HERE */}
+        <div 
+            className="flex-1 flex overflow-hidden relative transition-colors duration-300"
+            style={{ backgroundColor: chatBgColor }} 
+        >
             {selectedContact ? (
                 <>
                     <div className="flex-1 flex flex-col relative z-10 h-full">
                         <div className={`h-16 shrink-0 flex items-center justify-between px-6 border-b z-20 shadow-sm backdrop-blur-md ${isDarkMode ? 'bg-[#0f172a]/90 border-white/5' : 'bg-white/90 border-gray-200'}`}>
                             <div className="flex items-center gap-3">
-                                <div className={`w-9 h-9 rounded-lg ${theme.primary} flex items-center justify-center font-bold text-white shadow-lg`}>{selectedContact.phoneNumber?.slice(-2) || "N"}</div>
+                                <div className={`w-9 h-9 rounded-lg bg-indigo-500 flex items-center justify-center font-bold text-white shadow-lg`}>{selectedContact.phoneNumber?.slice(-2) || "N"}</div>
                                 <div>
                                     <h3 className={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{selectedContact.phoneNumber}</h3>
                                     <div className="flex items-center gap-2 text-xs">
@@ -869,7 +869,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                 {userRole !== 'agent' && (
                                     <button 
                                         onClick={() => setShowLeadDetails(!showLeadDetails)} 
-                                        className={`ml-3 p-2 rounded-lg transition border ${showLeadDetails ? `${theme.primary} border-transparent text-white shadow-lg` : (isDarkMode ? 'bg-white/5 text-slate-400 border-white/5 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-500 border-gray-200 hover:text-black hover:bg-gray-200')}`}
+                                        className={`ml-3 p-2 rounded-lg transition border ${showLeadDetails ? `bg-indigo-500 border-transparent text-white shadow-lg` : (isDarkMode ? 'bg-white/5 text-slate-400 border-white/5 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-500 border-gray-200 hover:text-black hover:bg-gray-200')}`}
                                         title="Toggle Campaign Data"
                                     >
                                         <ClipboardList size={18}/>
@@ -878,15 +878,14 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                             </div>
                         </div>
 
-                        <div className={`flex-1 overflow-y-auto p-6 space-y-3 z-10 ${isDarkMode ? 'bg-[#0b1221]' : 'bg-transparent'}`}>
-                            {/* 🔥 RENDERING MEMOIZED MESSAGES LIST */}
+                        <div className={`flex-1 overflow-y-auto p-6 space-y-3 z-10`}>
                             {renderedMessagesList}
                             <div ref={scrollRef} />
                         </div>
 
                         <div className={`p-4 border-t z-20 shrink-0 ${isDarkMode ? 'bg-[#0B1120] border-white/5' : 'bg-[#f0f2f5] border-gray-200'}`}>
                             <div className={`rounded-2xl flex flex-col border transition-colors shadow-lg relative backdrop-blur-sm 
-                                ${isDarkMode ? 'bg-[#1e293b]/50 border-white/5 focus-within:' + theme.border : 'bg-white border-gray-200 focus-within:border-gray-300'}`}>
+                                ${isDarkMode ? 'bg-[#1e293b]/50 border-white/5 focus-within:border-indigo-500' : 'bg-white border-gray-200 focus-within:border-gray-300'}`}>
                                 
                                 {mediaPreview && (
                                     <div className={`p-3 border-b flex items-center justify-between animate-in slide-in-from-bottom-2 ${isDarkMode ? 'bg-black/40 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
@@ -897,13 +896,12 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                                 {mediaPreview.type === 'audio' && <Mic size={20} className={isDarkMode ? 'text-white' : 'text-gray-600'}/>}
                                                 {mediaPreview.type === 'document' && <FileText size={20} className={isDarkMode ? 'text-white' : 'text-gray-600'}/>}
                                             </div>
-                                            <div><p className={`text-sm font-bold truncate w-48 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{mediaPreview.name}</p><p className={`text-xs ${theme.text} uppercase font-bold`}>{mediaPreview.type}</p></div>
+                                            <div><p className={`text-sm font-bold truncate w-48 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{mediaPreview.name}</p><p className={`text-xs text-indigo-400 uppercase font-bold`}>{mediaPreview.type}</p></div>
                                         </div>
                                         <button onClick={() => setMediaPreview(null)} className="p-2 hover:bg-red-500 hover:text-white rounded-full transition text-slate-400 bg-transparent"><X size={16}/></button>
                                     </div>
                                 )}
 
-                                {/* 🔥 NEW: Reply Preview Box */}
                                 {replyingTo && (
                                     <div className={`p-3 border-b-2 border-emerald-500 flex justify-between items-start animate-in slide-in-from-bottom-2 ${isDarkMode ? 'bg-black/40 text-slate-300' : 'bg-gray-100 text-gray-700'}`}>
                                         <div className="flex-1 overflow-hidden pr-2 border-l-4 border-emerald-500 pl-2">
@@ -935,7 +933,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                             </button>
 
                                             <textarea placeholder={mediaPreview ? "Add a caption..." : "Type a message..."} className={`flex-1 bg-transparent text-sm focus:outline-none px-2 py-3 resize-none custom-scrollbar max-h-32 ${isDarkMode ? 'text-white placeholder-slate-500' : 'text-gray-900 placeholder-gray-400'}`} rows={1} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} disabled={uploading}/>
-                                            {newMessage.trim() || mediaPreview ? (<button onClick={handleSendMessage} disabled={sending} className={`p-3 ${theme.primary} rounded-xl text-white ${theme.hover} transition shadow-lg self-center`}>{sending ? <Loader className="animate-spin" size={20}/> : <Send size={20}/>}</button>) : (<button onClick={startRecording} className={`p-3 rounded-xl transition self-center ${isDarkMode ? 'text-slate-400 hover:text-red-400 hover:bg-red-500/10' : 'text-gray-500 hover:text-red-500 hover:bg-red-50'}`}><Mic size={20} /></button>)}
+                                            {newMessage.trim() || mediaPreview ? (<button onClick={handleSendMessage} disabled={sending} className={`p-3 bg-indigo-600 rounded-xl text-white hover:bg-indigo-500 transition shadow-lg self-center`}>{sending ? <Loader className="animate-spin" size={20}/> : <Send size={20}/>}</button>) : (<button onClick={startRecording} className={`p-3 rounded-xl transition self-center ${isDarkMode ? 'text-slate-400 hover:text-red-400 hover:bg-red-500/10' : 'text-gray-500 hover:text-red-500 hover:bg-red-50'}`}><Mic size={20} /></button>)}
                                         </>
                                     )}
 
@@ -1012,7 +1010,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     )}
                                 </div>
 
-                                {uploading && <div className={`absolute inset-0 flex items-center justify-center gap-2 z-10 backdrop-blur-sm ${isDarkMode ? 'bg-[#1e293b]/90' : 'bg-white/80'}`}><Loader className={`animate-spin ${theme.text}`} size={20}/><span className={`text-xs ${theme.text} font-bold`}>Uploading Media...</span></div>}
+                                {uploading && <div className={`absolute inset-0 flex items-center justify-center gap-2 z-10 backdrop-blur-sm ${isDarkMode ? 'bg-[#1e293b]/90' : 'bg-white/80'}`}><Loader className={`animate-spin text-indigo-400`} size={20}/><span className={`text-xs text-indigo-400 font-bold`}>Uploading Media...</span></div>}
                             </div>
                         </div>
                     </div>
@@ -1022,7 +1020,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                         <div className={`w-[300px] shrink-0 border-l flex flex-col z-20 shadow-[-4px_0_15px_rgba(0,0,0,0.05)] animate-in slide-in-from-right-8 duration-300 ${isDarkMode ? 'bg-[#0f172a] border-white/5' : 'bg-white border-gray-200'}`}>
                             <div className={`h-16 flex items-center justify-between px-5 border-b shrink-0 ${isDarkMode ? 'border-white/5' : 'border-gray-200'}`}>
                                 <h3 className={`font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                                    <ClipboardList size={18} className={theme.text}/> Campaign Data
+                                    <ClipboardList size={18} className="text-indigo-400"/> Campaign Data
                                 </h3>
                                 <button onClick={() => setShowLeadDetails(false)} className="text-slate-400 hover:text-red-500 transition"><X size={16}/></button>
                             </div>
@@ -1033,7 +1031,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     <div className="flex items-center gap-3">
                                         {selectedContact.assignedTo ? (
                                             <>
-                                                <div className={`w-8 h-8 rounded-full ${theme.primary} flex items-center justify-center text-white font-bold text-xs shadow-md`}>
+                                                <div className={`w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs shadow-md`}>
                                                     {(typeof selectedContact.assignedTo === 'object' ? selectedContact.assignedTo.name : (agents.find(a => a._id === selectedContact.assignedTo)?.name || 'A')).charAt(0).toUpperCase()}
                                                 </div>
                                                 <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -1081,13 +1079,106 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                     )}
                 </>
             ) : (
-                <div className={`flex-1 flex flex-col items-center justify-center transition-colors z-10 ${isDarkMode ? 'text-slate-500 bg-[#0b1221]' : 'text-gray-400 bg-transparent'}`}>
-                    <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 shadow-2xl animate-pulse ${isDarkMode ? 'bg-[#1e293b]/50 shadow-indigo-500/10 border border-white/5' : 'bg-white border border-gray-200'}`}><MessageSquare size={40} className={`${theme.text} opacity-80`}/></div>
+                <div className={`flex-1 flex flex-col items-center justify-center transition-colors z-10 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                    <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 shadow-2xl animate-pulse ${isDarkMode ? 'bg-[#1e293b]/50 shadow-indigo-500/10 border border-white/5' : 'bg-white border border-gray-200'}`}><MessageSquare size={40} className="text-indigo-400 opacity-80"/></div>
                     <h1 className={`text-2xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Select a Conversation</h1>
                     <p className="text-sm">Choose a contact from the left to start chatting.</p>
                 </div>
             )}
         </div>
+
+        {/* ADD NEW CHAT MODAL */}
+        {showAddChatModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className={`border rounded-3xl w-full max-w-sm shadow-2xl p-6 ${isDarkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'}`}>
+                    <div className="flex justify-between items-center mb-5">
+                        <h3 className={`text-lg font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><MessageSquarePlus className="text-emerald-500" size={20}/> Add New Lead</h3>
+                        <button onClick={() => setShowAddChatModal(false)} className="text-slate-400 hover:text-red-500"><X size={18}/></button>
+                    </div>
+
+                    <div className="flex border-b border-gray-200 dark:border-white/10 mb-5">
+                        <button onClick={() => setAddChatMethod('manual')} className={`flex-1 pb-2 text-sm font-bold transition-colors ${addChatMethod === 'manual' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-slate-400 hover:text-slate-300'}`}>Manual Entry</button>
+                        <button onClick={() => setAddChatMethod('csv')} className={`flex-1 pb-2 text-sm font-bold transition-colors ${addChatMethod === 'csv' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-slate-400 hover:text-slate-300'}`}>CSV Upload</button>
+                    </div>
+                    
+                    {addChatMethod === 'manual' ? (
+                        <div className="space-y-4 animate-in slide-in-from-left-2 fade-in">
+                            <div>
+                                <label className="text-xs text-slate-400 mb-1 block">Phone Number (with country code, no +)</label>
+                                <input type="text" placeholder="e.g. 0771234567 or 9477..." value={newChatPhone} onChange={(e) => setNewChatPhone(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 mb-1 block">Name (Optional)</label>
+                                <input type="text" placeholder="e.g. Nimal" value={newChatName} onChange={(e) => setNewChatName(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
+                            </div>
+                            <button onClick={handleAddNewChat} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition mt-2">Add Contact</button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 animate-in slide-in-from-right-2 fade-in">
+                            <p className="text-xs text-slate-400 mb-2">Upload a CSV file containing your contacts. <br/>Format should be: <b>Phone, Name</b></p>
+                            <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${isDarkMode ? 'border-white/20 hover:border-emerald-500/50 bg-white/5' : 'border-gray-300 hover:border-emerald-500/50 bg-gray-50'}`}>
+                                <input type="file" accept=".csv" id="csvUpload" className="hidden" onChange={(e) => setCsvFile(e.target.files[0])} />
+                                <label htmlFor="csvUpload" className="cursor-pointer flex flex-col items-center">
+                                    <FileSpreadsheet size={32} className={`mb-3 ${csvFile ? 'text-emerald-500' : 'text-slate-400'}`} />
+                                    <span className="text-sm font-bold text-slate-300">{csvFile ? csvFile.name : 'Click to select CSV file'}</span>
+                                </label>
+                            </div>
+                            <button onClick={handleCsvUpload} disabled={!csvFile || isImporting} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition disabled:opacity-50 flex justify-center mt-2">
+                                {isImporting ? <Loader className="animate-spin" size={20}/> : 'Import Contacts'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* BULK ASSIGN MODAL */}
+        {showAssignModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className={`border rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${isDarkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'}`}>
+                    <div className={`p-5 border-b flex justify-between items-center ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                        <div><h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Assign Leads</h3><p className="text-xs text-slate-400">Distribute leads to your team</p></div>
+                        <button onClick={() => setShowAssignModal(false)} className="p-2 hover:bg-black/10 rounded-full text-slate-400 transition"><X size={18}/></button>
+                    </div>
+
+                    <div className="p-5 overflow-y-auto custom-scrollbar space-y-6">
+                        {selectedIds.length === 0 && (
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1e293b]/50 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
+                                <h4 className={`text-sm font-bold mb-3 flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><Zap size={16} className="text-amber-500"/> Quick Auto-Assign</h4>
+                                <div className="space-y-3">
+                                    <p className="text-xs text-slate-400">Select amount and direction:</p>
+                                    <div className="flex items-center gap-2">
+                                        <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(Math.max(1, parseInt(e.target.value) || 1))} className={`w-16 border rounded-lg p-2 text-center text-sm focus:outline-none focus:border-amber-500 ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'}`}/>
+                                        <div className={`flex-1 flex p-1 rounded-lg border ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
+                                            <button onClick={() => setAssignDirection('newest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'newest' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-black'}`}>
+                                                <ArrowUp size={12}/> Newest (Top)
+                                            </button>
+                                            <button onClick={() => setAssignDirection('oldest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'oldest' ? 'bg-blue-500 text-white shadow' : 'text-slate-400 hover:text-black'}`}>
+                                                <ArrowDown size={12}/> Oldest (Bottom)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div>
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Select Agent</h4>
+                            <div className="space-y-2">
+                                {agents.length === 0 ? <div className={`text-center p-4 text-slate-500 rounded-xl border border-dashed ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}><Users size={32} className="mx-auto mb-2 opacity-50"/><p className="text-sm">No agents available.</p></div> : agents.map(agent => (
+                                    <div key={agent._id} className={`flex items-center justify-between p-3 rounded-xl border transition group ${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}>
+                                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{agent.name.charAt(0).toUpperCase()}</div><div><h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{agent.name}</h4><p className="text-[10px] text-slate-400">{agent.email}</p></div></div>
+                                        <button onClick={() => handleBulkAssign(agent._id, selectedIds.length === 0)} className={`px-4 py-2 ${selectedIds.length === 0 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500 hover:text-black' : (isDarkMode ? 'bg-white/5 text-slate-300 hover:bg-white/20 hover:text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-black')} rounded-lg text-xs font-bold transition flex items-center gap-2`}>
+                                            {selectedIds.length === 0 ? `Assign ${assignAmount} (${assignDirection === 'newest' ? 'Top' : 'Bottom'})` : 'Assign Selected'} <ChevronRight size={14}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
   );
 
