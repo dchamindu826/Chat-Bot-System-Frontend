@@ -614,8 +614,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   };
 
   // 🔥 FIX FOR TYPING LAG: Memoized Contacts List - මේක තමයි ලොකුම වෙනස. ටයිප් කරද්දි මේක ලෝඩ් වෙන්නේ නෑ!
-  const renderedContactsList = useMemo(() => {
-      return filteredContacts.map(contact => {
+          const renderedContactsList = useMemo(() => {
+          return filteredContacts.slice(0, 50).map(contact => { // 🔥 මෙන්න මෙතන .slice(0, 50) කියන කෑල්ල එකතු කරන්න
           const assignedAgentObj = typeof contact.assignedTo === 'object' ? contact.assignedTo : agents.find(a => a._id === contact.assignedTo);
           const displayAgentName = assignedAgentObj ? assignedAgentObj.name : 'Agent';
           const cStatus = contact.callStatus || contact.call_status || 'Pending';
