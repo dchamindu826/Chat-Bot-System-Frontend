@@ -812,33 +812,41 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
                         <div className={`flex-1 overflow-y-auto p-6 space-y-3 z-10 ${isDarkMode ? 'bg-[#0b1221]' : 'bg-transparent'}`}>
                             {messages.map((msg, index) => (
-                                <div key={index} className={`flex group relative ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
+                                <div key={index} className={`flex items-center group gap-2 ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
                                     
-                                    {/* 🔥 NEW: Reply Button (Left Side for incoming) */}
-                                    {(msg.direction !== 'outbound' && msg.sender !== 'me' && msg.whatsapp_message_id) && (
-                                        <button onClick={() => setReplyingTo(msg)} className="hidden group-hover:flex absolute top-1/2 -right-10 -translate-y-1/2 p-2 rounded-full bg-black/20 text-slate-400 hover:text-white hover:bg-emerald-500/80 transition shadow-lg">
-                                            <Reply size={14} />
-                                        </button>
+                                    {/* INCOMING MESSAGES (Customer) */}
+                                    {(msg.direction !== 'outbound' && msg.sender !== 'me') && (
+                                        <>
+                                            <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${isDarkMode ? theme.bubbleYou : 'bg-white'} ${isDarkMode ? 'text-slate-200' : 'text-gray-800'} rounded-tl-none ${isDarkMode ? 'border-white/5' : 'border-gray-200'}`}>
+                                                {renderMessageContent(msg)}
+                                                <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                                                    {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                                                </div>
+                                            </div>
+
+                                            {/* Reply Button (Hover කලාම පේනවා) */}
+                                            <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
+                                                <Reply size={14} />
+                                            </button>
+                                        </>
                                     )}
 
-                                    <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border 
-                                        ${msg.direction === 'outbound' || msg.sender === 'me' 
-                                            ? `${theme.bubbleMe} text-white rounded-tr-none ${isDarkMode ? 'border-white/10' : 'border-transparent'}` 
-                                            : `${isDarkMode ? theme.bubbleYou : 'bg-white'} ${isDarkMode ? 'text-slate-200' : 'text-gray-800'} rounded-tl-none ${isDarkMode ? 'border-white/5' : 'border-white'}`
-                                        }`}>
-                                        {renderMessageContent(msg)}
-                                        <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] 
-                                            ${msg.direction === 'outbound' || msg.sender === 'me' ? 'text-white/70' : (isDarkMode ? 'text-slate-500' : 'text-gray-400')}`}>
-                                            {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
-                                            {(msg.direction === 'outbound' || msg.sender === 'me') && <CheckCheck size={12}/>}
-                                        </div>
-                                    </div>
+                                    {/* OUTBOUND MESSAGES (Agent/Me) */}
+                                    {(msg.direction === 'outbound' || msg.sender === 'me') && (
+                                        <>
+                                            {/* Reply Button (Hover කලාම පේනවා) */}
+                                            <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
+                                                <Reply size={14} />
+                                            </button>
 
-                                    {/* 🔥 NEW: Reply Button (Right Side for outbound) */}
-                                    {(msg.direction === 'outbound' || msg.sender === 'me') && msg.whatsapp_message_id && (
-                                        <button onClick={() => setReplyingTo(msg)} className="hidden group-hover:flex absolute top-1/2 -left-10 -translate-y-1/2 p-2 rounded-full bg-black/20 text-slate-400 hover:text-white hover:bg-emerald-500/80 transition shadow-lg">
-                                            <Reply size={14} />
-                                        </button>
+                                            <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${theme.bubbleMe} text-white rounded-tr-none ${isDarkMode ? 'border-white/10' : 'border-transparent'}`}>
+                                                {renderMessageContent(msg)}
+                                                <div className="flex items-center justify-end gap-1 mt-1.5 text-[10px] text-white/70">
+                                                    {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                                                    <CheckCheck size={12}/>
+                                                </div>
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             ))}
