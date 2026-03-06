@@ -508,47 +508,51 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
-  const filteredContacts = contacts
-    .filter(c => {
-      const contactPhone = c.phoneNumber || c.phone_number || "";
-      const matchesSearch = contactPhone.includes(searchTerm);
-      
-      if(userRole === 'agent') return matchesSearch;
-      
-      let matchesTab = true;
-      const isImported = c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV';
+  // 🔥 FIX FOR TYPING LAG: Filter & Sort වෙන එකත් Cache කරනවා. එතකොට ටයිප් කරද්දි මේක ලෝඩ් වෙන්නෙ නෑ.
+  const filteredContacts = useMemo(() => {
+    return contacts
+      .filter(c => {
+        const contactPhone = c.phoneNumber || c.phone_number || "";
+        const matchesSearch = contactPhone.includes(searchTerm);
+        
+        if(userRole === 'agent') return matchesSearch;
+        
+        let matchesTab = true;
+        const isImported = c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV';
 
-      if (activeTab === 'New Chat') {
-          matchesTab = !c.assignedTo && !isImported;
-      } else if (activeTab === 'Imported') {
-          matchesTab = !c.assignedTo && isImported;
-      } else if (activeTab === 'Assigned') {
-          matchesTab = !!c.assignedTo;
-      } else if (activeTab === 'All') {
-          matchesTab = true;
-      }
-      
-      let matchesAgent = true;
-      if (selectedAgentFilter !== 'All') {
-          const cAgentId = typeof c.assignedTo === 'object' ? c.assignedTo?._id : c.assignedTo;
-          matchesAgent = cAgentId === selectedAgentFilter;
-      }
+        if (activeTab === 'New Chat') {
+            matchesTab = !c.assignedTo && !isImported;
+        } else if (activeTab === 'Imported') {
+            matchesTab = !c.assignedTo && isImported;
+        } else if (activeTab === 'Assigned') {
+            matchesTab = !!c.assignedTo;
+        } else if (activeTab === 'All') {
+            matchesTab = true;
+        }
+        
+        let matchesAgent = true;
+        if (selectedAgentFilter !== 'All') {
+            const cAgentId = typeof c.assignedTo === 'object' ? c.assignedTo?._id : c.assignedTo;
+            matchesAgent = cAgentId === selectedAgentFilter;
+        }
 
-      let matchesStatus = true;
-      if (selectedStatusFilter !== 'All') {
-          const cStatus = c.callStatus || c.call_status || 'pending';
-          matchesStatus = cStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
-      }
+        let matchesStatus = true;
+        if (selectedStatusFilter !== 'All') {
+            const cStatus = c.callStatus || c.call_status || 'pending';
+            matchesStatus = cStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
+        }
 
-      let matchesPhase = true;
-      if (selectedPhaseFilter !== 'All') {
-          const cPhase = c.phase || c.status || 1;
-          matchesPhase = String(cPhase) === selectedPhaseFilter;
-      }
+        let matchesPhase = true;
+        if (selectedPhaseFilter !== 'All') {
+            const cPhase = c.phase || c.status || 1;
+            matchesPhase = String(cPhase) === selectedPhaseFilter;
+        }
 
-      return matchesTab && matchesAgent && matchesStatus && matchesPhase && matchesSearch;
-    })
-    .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
+        return matchesTab && matchesAgent && matchesStatus && matchesPhase && matchesSearch;
+      })
+      .sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
+  }, [contacts, searchTerm, userRole, activeTab, selectedAgentFilter, selectedStatusFilter, selectedPhaseFilter]);
+
 
   const renderMessageContent = (msg) => {
     const mediaUrl = msg.mediaUrl || msg.media_url || (msg.type !== 'text' ? msg.content : null);
@@ -559,7 +563,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
     return (
         <div className="flex flex-col">
-            {/* 🔥 NEW: මේකෙන් තමයි Reply කරපු පරණ මැසේජ් එක ලස්සනට පෙන්නන්නේ */}
             {msg.replyContext && (
                 <div className={`mb-2 p-2.5 rounded-lg border-l-4 border-emerald-500 opacity-90 text-[11px] font-medium truncate ${isMe ? 'bg-black/20 text-slate-300' : (isDarkMode ? 'bg-black/30 text-slate-400' : 'bg-gray-100 text-gray-500')}`}>
                     <span className="text-emerald-500 font-bold mr-2">Replied to:</span>
@@ -653,7 +656,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               </div>
           );
       });
-  }, [filteredContacts, selectedContact?._id, selectedIds, isDarkMode, theme]);
+  }, [filteredContacts, selectedContact?._id, selectedIds, isDarkMode, theme, agents, userRole]);
 
   // 🔥 FIX FOR TYPING LAG: Memoized Messages List
   const renderedMessagesList = useMemo(() => {
