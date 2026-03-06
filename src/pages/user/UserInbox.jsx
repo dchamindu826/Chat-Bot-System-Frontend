@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import MainLayout from '../../layouts/MainLayout';
 import { 
   Search, UserPlus, Send, Paperclip, CheckSquare, Square, Mic, 
@@ -6,7 +6,7 @@ import {
   FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, 
   RefreshCw, Palette, Type, Minus, Plus, Zap, ArrowUp, ArrowDown, 
   PlusCircle, Sun, Moon, ClipboardList, Tag, Filter, MessageSquarePlus, FileSpreadsheet,
-  LayoutTemplate, Reply // 🔥 NEW: Reply Icon
+  LayoutTemplate, Reply 
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
@@ -76,7 +76,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [uploadingTemplateMedia, setUploadingTemplateMedia] = useState(false);
   const [templateMediaPreview, setTemplateMediaPreview] = useState(null);
 
-  // 🔥 NEW: Reply State
   const [replyingTo, setReplyingTo] = useState(null);
 
   const token = localStorage.getItem('token');
@@ -185,7 +184,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       if(!window.confirm("Delete this quick reply?")) return;
       try {
           await fetch(`${API_BASE_URL}/api/quick-replies/${id}`, { method: 'DELETE', headers: { token: `Bearer ${token}` } });
-          setTemplates(templates.filter(t => t.id !== id)); // 🔥 FIXED: Use t.id instead of t._id
+          setTemplates(templates.filter(t => t.id !== id));
       } catch(err) { alert("Delete failed"); }
   };
 
@@ -238,46 +237,40 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { console.error(err); }
   };
 
+  // 🔥 FIX FOR TYPING LAG: Reduced contact fetching frequency to 15 seconds
   useEffect(() => { 
-      loadData(); // Mulinma eka parak load karanawa
-      
-      // 1. Contacts la load wena eka thathpara 15kata sarayak (Lag eka adu karanna)
+      loadData(); 
       const contactInterval = setInterval(() => {
           loadData();
-      }, 15000);
+      }, 15000); 
 
-      // 2. Chat Messages tika witharak thathpara 3n 3ta load karanawa (Smooth wenna)
-      const msgInterval = setInterval(() => {
-          if (selectedContact) {
-              fetch(`${API_BASE_URL}/api/messages/${selectedContact._id}`, { headers: { token: `Bearer ${token}` } })
-                .then(res => res.json())
-                .then(data => { 
-                    if(Array.isArray(data)) {
-                        setMessages(prev => {
-                            if (prev.length !== data.length) return data;
-                            if (prev.length > 0 && data.length > 0 && prev[prev.length-1]._id !== data[data.length-1]._id) return data;
-                            return prev;
-                        });
-                    }
-                })
-                .catch(err => console.error(err));
-          }
-      }, 3000); 
+      return () => clearInterval(contactInterval);
+  }, [token]);
 
-      return () => {
-          clearInterval(contactInterval);
-          clearInterval(msgInterval);
-      };
-  }, [selectedContact, token]);
-
+  // 🔥 FIX FOR TYPING LAG: Messages only fetch every 3 seconds for the active chat
   useEffect(() => {
-    if(selectedContact) {
-        fetch(`${API_BASE_URL}/api/messages/${selectedContact._id}`, { headers: { token: `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(data => { if(Array.isArray(data)) setMessages(data); })
-            .catch(err => console.error(err));
-        setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, unreadCount: 0 } : c));
-    }
+      let msgInterval;
+      if (selectedContact) {
+          const fetchMsgs = () => {
+              fetch(`${API_BASE_URL}/api/messages/${selectedContact._id}`, { headers: { token: `Bearer ${token}` } })
+                  .then(res => res.json())
+                  .then(data => { 
+                      if(Array.isArray(data)) {
+                          setMessages(prev => {
+                              if (prev.length !== data.length) return data;
+                              if (prev.length > 0 && data.length > 0 && prev[prev.length-1]._id !== data[data.length-1]._id) return data;
+                              return prev;
+                          });
+                      }
+                  })
+                  .catch(err => console.error(err));
+          };
+          fetchMsgs();
+          msgInterval = setInterval(fetchMsgs, 3000);
+          
+          setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, unreadCount: 0 } : c));
+      }
+      return () => { if (msgInterval) clearInterval(msgInterval); }
   }, [selectedContact, token]);
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, mediaPreview, replyingTo]);
@@ -396,8 +389,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             text: textToSend,
             type: typeToSend,
             mediaUrl: mediaToSend,
-            // 🔥 NEW: Reply to Message ID
-            replyToMessageId: replyingTo ? replyingTo.whatsapp_message_id : null
+            replyToMessageId: replyingTo ? replyingTo.whatsapp_message_id : null,
+            // 🔥 NEW: Reply කරන පරණ මැසේජ් එකේ වචන ටික Backend එකට යවනවා UI එකේ පේන්න
+            replyContext: replyingTo ? (replyingTo.text || replyingTo.content || 'Media/Attachment') : null 
           };
 
           const res = await fetch(`${API_BASE_URL}/api/messages/send`, {
@@ -411,7 +405,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               setMessages(prev => [...prev, sentMsg]);
               setNewMessage("");
               setMediaPreview(null);
-              setReplyingTo(null); // Clear reply state
+              setReplyingTo(null); 
               setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
           } else {
               const errData = await res.json();
@@ -565,6 +559,14 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
     return (
         <div className="flex flex-col">
+            {/* 🔥 NEW: මේකෙන් තමයි Reply කරපු පරණ මැසේජ් එක ලස්සනට පෙන්නන්නේ */}
+            {msg.replyContext && (
+                <div className={`mb-2 p-2.5 rounded-lg border-l-4 border-emerald-500 opacity-90 text-[11px] font-medium truncate ${isMe ? 'bg-black/20 text-slate-300' : (isDarkMode ? 'bg-black/30 text-slate-400' : 'bg-gray-100 text-gray-500')}`}>
+                    <span className="text-emerald-500 font-bold mr-2">Replied to:</span>
+                    {msg.replyContext}
+                </div>
+            )}
+
             {hasMedia && (
                 <div className={`mb-2 rounded-lg overflow-hidden ${isCaption ? 'border-b border-white/10 pb-2' : ''}`}>
                     {msg.type === 'image' && (
@@ -607,6 +609,98 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
         </div>
     );
   };
+
+  // 🔥 FIX FOR TYPING LAG: Memoized Contacts List - මේක තමයි ලොකුම වෙනස. ටයිප් කරද්දි මේක ලෝඩ් වෙන්නේ නෑ!
+  const renderedContactsList = useMemo(() => {
+      return filteredContacts.map(contact => {
+          const assignedAgentObj = typeof contact.assignedTo === 'object' ? contact.assignedTo : agents.find(a => a._id === contact.assignedTo);
+          const displayAgentName = assignedAgentObj ? assignedAgentObj.name : 'Agent';
+          const cStatus = contact.callStatus || contact.call_status || 'Pending';
+
+          return (
+              <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? `${theme.soft} ${theme.border} border-opacity-40 shadow-inner` : `bg-transparent border-transparent ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}`}>
+                  {userRole !== 'agent' && (
+                      <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(contact._id) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(contact._id) ? setSelectedIds(selectedIds.filter(id => id !== contact._id)) : setSelectedIds([...selectedIds, contact._id]) }}>{selectedIds.includes(contact._id) ? <CheckSquare className={`${theme.text} bg-[#0f172a] rounded`} size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
+                  )}
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${contact.assignedTo ? theme.primary : 'bg-slate-700'}`}>{contact.phoneNumber?.slice(-2) || "N"}</div>
+                  <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-0.5">
+                          <div className="flex items-center gap-2">
+                              <h4 className={`font-bold text-sm truncate ${selectedContact?._id === contact._id ? (isDarkMode ? 'text-white' : 'text-gray-900') : (isDarkMode ? 'text-slate-300' : 'text-gray-700')}`}>{contact.phoneNumber}</h4>
+                              {(contact.unreadCount > 0) && (
+                                  <span className={`h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold shadow-sm animate-pulse`}>
+                                      {contact.unreadCount}
+                                  </span>
+                              )}
+                          </div>
+                          <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{new Date(contact.lastMessageTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                      </div>
+                      <p className={`text-xs truncate mb-1 ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>{contact.lastMessage || "New Lead"}</p>
+                      
+                      <div className="flex items-center justify-between">
+                          {contact.assignedTo ? (
+                              <div className="flex items-center gap-1.5">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                  <span className="text-[10px] font-bold text-slate-400">{displayAgentName}</span>
+                              </div>
+                          ) : (<span className="text-[9px] text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">UNASSIGNED</span>)}
+                          
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${cStatus.toLowerCase() === 'answered' ? 'text-emerald-500 bg-emerald-500/10' : (cStatus.toLowerCase() === 'pending' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10')}`}>
+                              {cStatus}
+                          </span>
+                      </div>
+                  </div>
+              </div>
+          );
+      });
+  }, [filteredContacts, selectedContact?._id, selectedIds, isDarkMode, theme]);
+
+  // 🔥 FIX FOR TYPING LAG: Memoized Messages List
+  const renderedMessagesList = useMemo(() => {
+      return messages.map((msg, index) => (
+          <div key={index} className={`flex items-center group gap-2 ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
+              
+              {/* INCOMING MESSAGES (Customer) */}
+              {(msg.direction !== 'outbound' && msg.sender !== 'me') && (
+                  <>
+                      <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${isDarkMode ? theme.bubbleYou : 'bg-white'} ${isDarkMode ? 'text-slate-200' : 'text-gray-800'} rounded-tl-none ${isDarkMode ? 'border-white/5' : 'border-gray-200'}`}>
+                          {renderMessageContent(msg)}
+                          <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                              {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                          </div>
+                      </div>
+
+                      {/* Reply Button (Hover කලාම පේනවා) */}
+                      {msg.whatsapp_message_id && (
+                          <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
+                              <Reply size={14} />
+                          </button>
+                      )}
+                  </>
+              )}
+
+              {/* OUTBOUND MESSAGES (Agent/Me) */}
+              {(msg.direction === 'outbound' || msg.sender === 'me') && (
+                  <>
+                      {/* Reply Button (Hover කලාම පේනවා) */}
+                      {msg.whatsapp_message_id && (
+                          <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
+                              <Reply size={14} />
+                          </button>
+                      )}
+
+                      <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${theme.bubbleMe} text-white rounded-tr-none ${isDarkMode ? 'border-white/10' : 'border-transparent'}`}>
+                          {renderMessageContent(msg)}
+                          <div className="flex items-center justify-end gap-1 mt-1.5 text-[10px] text-white/70">
+                              {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
+                              <CheckCheck size={12}/>
+                          </div>
+                      </div>
+                  </>
+              )}
+          </div>
+      ));
+  }, [messages, isDarkMode, theme, fontIndex]);
 
   const content = (
       <div className={`flex h-full rounded-3xl overflow-hidden shadow-2xl relative transition-colors duration-300 border ${isDarkMode ? 'bg-[#0B1120] border-white/10' : 'bg-white border-gray-200'}`}>
@@ -736,47 +830,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             )}
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                {filteredContacts.map(contact => {
-                    const assignedAgentObj = typeof contact.assignedTo === 'object' ? contact.assignedTo : agents.find(a => a._id === contact.assignedTo);
-                    const displayAgentName = assignedAgentObj ? assignedAgentObj.name : 'Agent';
-                    const cStatus = contact.callStatus || contact.call_status || 'Pending';
-
-                    return (
-                        <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? `${theme.soft} ${theme.border} border-opacity-40 shadow-inner` : `bg-transparent border-transparent ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}`}>
-                            {userRole !== 'agent' && (
-                                <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(contact._id) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(contact._id) ? setSelectedIds(selectedIds.filter(id => id !== contact._id)) : setSelectedIds([...selectedIds, contact._id]) }}>{selectedIds.includes(contact._id) ? <CheckSquare className={`${theme.text} bg-[#0f172a] rounded`} size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
-                            )}
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${contact.assignedTo ? theme.primary : 'bg-slate-700'}`}>{contact.phoneNumber?.slice(-2) || "N"}</div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center mb-0.5">
-                                    <div className="flex items-center gap-2">
-                                        <h4 className={`font-bold text-sm truncate ${selectedContact?._id === contact._id ? (isDarkMode ? 'text-white' : 'text-gray-900') : (isDarkMode ? 'text-slate-300' : 'text-gray-700')}`}>{contact.phoneNumber}</h4>
-                                        {(contact.unreadCount > 0) && (
-                                            <span className={`h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold shadow-sm animate-pulse`}>
-                                                {contact.unreadCount}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{new Date(contact.lastMessageTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                                </div>
-                                <p className={`text-xs truncate mb-1 ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>{contact.lastMessage || "New Lead"}</p>
-                                
-                                <div className="flex items-center justify-between">
-                                    {contact.assignedTo ? (
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                                            <span className="text-[10px] font-bold text-slate-400">{displayAgentName}</span>
-                                        </div>
-                                    ) : (<span className="text-[9px] text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">UNASSIGNED</span>)}
-                                    
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${cStatus.toLowerCase() === 'answered' ? 'text-emerald-500 bg-emerald-500/10' : (cStatus.toLowerCase() === 'pending' ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10')}`}>
-                                        {cStatus}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
+                {/* 🔥 RENDERING MEMOIZED CONTACTS LIST */}
+                {renderedContactsList}
             </div>
         </div>
 
@@ -821,45 +876,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                         </div>
 
                         <div className={`flex-1 overflow-y-auto p-6 space-y-3 z-10 ${isDarkMode ? 'bg-[#0b1221]' : 'bg-transparent'}`}>
-                            {messages.map((msg, index) => (
-                                <div key={index} className={`flex items-center group gap-2 ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
-                                    
-                                    {/* INCOMING MESSAGES (Customer) */}
-                                    {(msg.direction !== 'outbound' && msg.sender !== 'me') && (
-                                        <>
-                                            <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${isDarkMode ? theme.bubbleYou : 'bg-white'} ${isDarkMode ? 'text-slate-200' : 'text-gray-800'} rounded-tl-none ${isDarkMode ? 'border-white/5' : 'border-gray-200'}`}>
-                                                {renderMessageContent(msg)}
-                                                <div className={`flex items-center justify-end gap-1 mt-1.5 text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-                                                    {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
-                                                </div>
-                                            </div>
-
-                                            {/* Reply Button (Hover කලාම පේනවා) */}
-                                            <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
-                                                <Reply size={14} />
-                                            </button>
-                                        </>
-                                    )}
-
-                                    {/* OUTBOUND MESSAGES (Agent/Me) */}
-                                    {(msg.direction === 'outbound' || msg.sender === 'me') && (
-                                        <>
-                                            {/* Reply Button (Hover කලාම පේනවා) */}
-                                            <button onClick={() => setReplyingTo(msg)} className={`opacity-0 group-hover:opacity-100 p-2 rounded-full transition shadow-sm ${isDarkMode ? 'bg-white/10 text-slate-400 hover:text-white hover:bg-emerald-500/80' : 'bg-gray-200 text-gray-500 hover:text-emerald-600'}`}>
-                                                <Reply size={14} />
-                                            </button>
-
-                                            <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border ${theme.bubbleMe} text-white rounded-tr-none ${isDarkMode ? 'border-white/10' : 'border-transparent'}`}>
-                                                {renderMessageContent(msg)}
-                                                <div className="flex items-center justify-end gap-1 mt-1.5 text-[10px] text-white/70">
-                                                    {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} 
-                                                    <CheckCheck size={12}/>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            ))}
+                            {/* 🔥 RENDERING MEMOIZED MESSAGES LIST */}
+                            {renderedMessagesList}
                             <div ref={scrollRef} />
                         </div>
 
@@ -934,7 +952,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                                                 {t.title}
                                                                 {(t.media_url || t.mediaUrl) && <Paperclip size={10} className="inline ml-1 text-blue-400"/>}
                                                             </h4>
-                                                            {/* 🔥 FIXED: Use t.id here instead of t._id */}
                                                             <button onClick={(e) => { e.stopPropagation(); handleDeleteQuickReply(t.id); }} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"><Trash2 size={12}/></button>
                                                         </div>
                                                         <p className="text-[10px] text-slate-400 truncate">{t.message || 'Media File'}</p>
@@ -1068,99 +1085,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 </div>
             )}
         </div>
-
-        {/* ADD NEW CHAT MODAL */}
-        {showAddChatModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-                <div className={`border rounded-3xl w-full max-w-sm shadow-2xl p-6 ${isDarkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'}`}>
-                    <div className="flex justify-between items-center mb-5">
-                        <h3 className={`text-lg font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><MessageSquarePlus className="text-emerald-500" size={20}/> Add New Lead</h3>
-                        <button onClick={() => setShowAddChatModal(false)} className="text-slate-400 hover:text-red-500"><X size={18}/></button>
-                    </div>
-
-                    <div className="flex border-b border-gray-200 dark:border-white/10 mb-5">
-                        <button onClick={() => setAddChatMethod('manual')} className={`flex-1 pb-2 text-sm font-bold transition-colors ${addChatMethod === 'manual' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-slate-400 hover:text-slate-300'}`}>Manual Entry</button>
-                        <button onClick={() => setAddChatMethod('csv')} className={`flex-1 pb-2 text-sm font-bold transition-colors ${addChatMethod === 'csv' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-slate-400 hover:text-slate-300'}`}>CSV Upload</button>
-                    </div>
-                    
-                    {addChatMethod === 'manual' ? (
-                        <div className="space-y-4 animate-in slide-in-from-left-2 fade-in">
-                            <div>
-                                <label className="text-xs text-slate-400 mb-1 block">Phone Number (with country code, no +)</label>
-                                <input type="text" placeholder="e.g. 0771234567 or 9477..." value={newChatPhone} onChange={(e) => setNewChatPhone(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-400 mb-1 block">Name (Optional)</label>
-                                <input type="text" placeholder="e.g. Nimal" value={newChatName} onChange={(e) => setNewChatName(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
-                            </div>
-                            <button onClick={handleAddNewChat} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition mt-2">Add Contact</button>
-                        </div>
-                    ) : (
-                        <div className="space-y-4 animate-in slide-in-from-right-2 fade-in">
-                            <p className="text-xs text-slate-400 mb-2">Upload a CSV file containing your contacts. <br/>Format should be: <b>Phone, Name</b></p>
-                            <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${isDarkMode ? 'border-white/20 hover:border-emerald-500/50 bg-white/5' : 'border-gray-300 hover:border-emerald-500/50 bg-gray-50'}`}>
-                                <input type="file" accept=".csv" id="csvUpload" className="hidden" onChange={(e) => setCsvFile(e.target.files[0])} />
-                                <label htmlFor="csvUpload" className="cursor-pointer flex flex-col items-center">
-                                    <FileSpreadsheet size={32} className={`mb-3 ${csvFile ? 'text-emerald-500' : 'text-slate-400'}`} />
-                                    <span className="text-sm font-bold text-slate-300">{csvFile ? csvFile.name : 'Click to select CSV file'}</span>
-                                </label>
-                            </div>
-                            <button onClick={handleCsvUpload} disabled={!csvFile || isImporting} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition disabled:opacity-50 flex justify-center mt-2">
-                                {isImporting ? <Loader className="animate-spin" size={20}/> : 'Import Contacts'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* BULK ASSIGN MODAL */}
-        {showAssignModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-                <div className={`border rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${isDarkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'}`}>
-                    <div className={`p-5 border-b flex justify-between items-center ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
-                        <div><h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Assign Leads</h3><p className="text-xs text-slate-400">Distribute leads to your team</p></div>
-                        <button onClick={() => setShowAssignModal(false)} className="p-2 hover:bg-black/10 rounded-full text-slate-400 transition"><X size={18}/></button>
-                    </div>
-
-                    <div className="p-5 overflow-y-auto custom-scrollbar space-y-6">
-                        {selectedIds.length === 0 && (
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1e293b]/50 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
-                                <h4 className={`text-sm font-bold mb-3 flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><Zap size={16} className="text-amber-500"/> Quick Auto-Assign</h4>
-                                <div className="space-y-3">
-                                    <p className="text-xs text-slate-400">Select amount and direction:</p>
-                                    <div className="flex items-center gap-2">
-                                        <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(Math.max(1, parseInt(e.target.value) || 1))} className={`w-16 border rounded-lg p-2 text-center text-sm focus:outline-none focus:border-amber-500 ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'}`}/>
-                                        <div className={`flex-1 flex p-1 rounded-lg border ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
-                                            <button onClick={() => setAssignDirection('newest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'newest' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-black'}`}>
-                                                <ArrowUp size={12}/> Newest (Top)
-                                            </button>
-                                            <button onClick={() => setAssignDirection('oldest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'oldest' ? 'bg-blue-500 text-white shadow' : 'text-slate-400 hover:text-black'}`}>
-                                                <ArrowDown size={12}/> Oldest (Bottom)
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <div>
-                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Select Agent</h4>
-                            <div className="space-y-2">
-                                {agents.length === 0 ? <div className={`text-center p-4 text-slate-500 rounded-xl border border-dashed ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}><Users size={32} className="mx-auto mb-2 opacity-50"/><p className="text-sm">No agents available.</p></div> : agents.map(agent => (
-                                    <div key={agent._id} className={`flex items-center justify-between p-3 rounded-xl border transition group ${isDarkMode ? `bg-white/5 border-white/5 hover:${theme.soft} hover:${theme.border}` : `bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300`}`}>
-                                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{agent.name.charAt(0).toUpperCase()}</div><div><h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{agent.name}</h4><p className="text-[10px] text-slate-400">{agent.email}</p></div></div>
-                                        <button onClick={() => handleBulkAssign(agent._id, selectedIds.length === 0)} className={`px-4 py-2 ${selectedIds.length === 0 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500 hover:text-black' : (isDarkMode ? 'bg-white/5 text-slate-300 hover:bg-white/20 hover:text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-black')} rounded-lg text-xs font-bold transition flex items-center gap-2`}>
-                                            {selectedIds.length === 0 ? `Assign ${assignAmount} (${assignDirection === 'newest' ? 'Top' : 'Bottom'})` : 'Assign Selected'} <ChevronRight size={14}/>
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
       </div>
   );
 
