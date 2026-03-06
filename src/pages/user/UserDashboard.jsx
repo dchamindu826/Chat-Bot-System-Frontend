@@ -1,28 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import MainLayout from '../../layouts/MainLayout';
-import { Users, PhoneCall, MessageCircle, TrendingUp, BarChart2, Download, Layers, Filter } from 'lucide-react';
+import { Users, PhoneCall, MessageCircle, TrendingUp, BarChart2, Download, Layers, Filter, Clock } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const UserDashboard = () => {
   const [activePhase, setActivePhase] = useState('All'); 
+  const [timeFilter, setTimeFilter] = useState('All'); // 🔥 NEW: Time filter state
   
   const [stats, setStats] = useState({ totalCalls: 0, totalMessages: 0, responseRate: 0 });
   const [report, setReport] = useState([]);
   const [loading, setLoading] = useState(false);
   const token = localStorage.getItem('token');
 
-  const fetchData = async (phase) => {
+  const fetchData = async (phase, time) => {
     setLoading(true);
     try {
-        const query = phase === 'All' ? '' : `?phase=${phase}`;
+        let queryParams = new URLSearchParams();
+        if (phase !== 'All') queryParams.append('phase', phase);
+        if (time !== 'All') queryParams.append('time', time);
+        
+        const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
-        const statsRes = await fetch(`${API_BASE_URL}/api/analytics/user-stats${query}`, { 
+        const statsRes = await fetch(`${API_BASE_URL}/api/analytics/user-stats${queryString}`, { 
             headers: { token: `Bearer ${token}` } 
         });
         if(statsRes.ok) setStats(await statsRes.json());
 
-        const reportRes = await fetch(`${API_BASE_URL}/api/analytics/agent-performance${query}`, { 
+        const reportRes = await fetch(`${API_BASE_URL}/api/analytics/agent-performance${queryString}`, { 
             headers: { token: `Bearer ${token}` } 
         });
         if(reportRes.ok) setReport(await reportRes.json());
@@ -35,8 +40,8 @@ const UserDashboard = () => {
   };
 
   useEffect(() => {
-    fetchData(activePhase);
-  }, [activePhase]);
+    fetchData(activePhase, timeFilter);
+  }, [activePhase, timeFilter]);
 
   const downloadCSV = () => {
     if (report.length === 0) return alert("No data available to download!");
@@ -60,7 +65,7 @@ const UserDashboard = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Campaign_Report_${activePhase}.csv`);
+    link.setAttribute("download", `Campaign_Report_${activePhase}_${timeFilter}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -78,21 +83,39 @@ const UserDashboard = () => {
                 <p className="text-slate-400 text-sm">Monitor agent performance across campaign phases</p>
             </div>
 
-            <div className="flex bg-[#0f172a]/50 p-1.5 rounded-xl border border-white/10">
-                {['All', 1, 2, 3].map((phase) => (
+            <div className="flex flex-col sm:flex-row gap-3">
+                {/* 🔥 NEW: Time Filter - Ada Dawase Progress eka balanna */}
+                <div className="flex bg-[#0f172a]/50 p-1.5 rounded-xl border border-white/10">
                     <button
-                        key={phase}
-                        onClick={() => setActivePhase(phase)}
-                        className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
-                            activePhase === phase 
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' 
-                            : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        }`}
+                        onClick={() => setTimeFilter('All')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeFilter === 'All' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                     >
-                        {phase === 'All' ? <Filter size={14}/> : <Layers size={14}/>}
-                        {phase === 'All' ? 'Overall' : `Phase 0${phase}`}
+                        All Time
                     </button>
-                ))}
+                    <button
+                        onClick={() => setTimeFilter('today')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${timeFilter === 'today' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/25' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        <Clock size={14}/> Today
+                    </button>
+                </div>
+
+                <div className="flex bg-[#0f172a]/50 p-1.5 rounded-xl border border-white/10">
+                    {['All', 1, 2, 3].map((phase) => (
+                        <button
+                            key={phase}
+                            onClick={() => setActivePhase(phase)}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
+                                activePhase === phase 
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' 
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
+                        >
+                            {phase === 'All' ? <Filter size={14}/> : <Layers size={14}/>}
+                            {phase === 'All' ? 'Overall' : `Phase 0${phase}`}
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
 
@@ -117,7 +140,7 @@ const UserDashboard = () => {
             />
             <StatsCard 
                 title="Current View" 
-                value={activePhase === 'All' ? "All Phases" : `Phase 0${activePhase}`} 
+                value={timeFilter === 'today' ? "Today's Stats" : (activePhase === 'All' ? "All Phases" : `Phase 0${activePhase}`)} 
                 icon={<Layers size={24}/>} 
                 color="orange" 
                 isText={true}
@@ -132,7 +155,8 @@ const UserDashboard = () => {
                     <PhoneCall className="text-blue-400" size={20}/> 
                     Agent Performance 
                     <span className="text-slate-500 text-sm font-normal ml-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
-                        {activePhase === 'All' ? 'All Phases' : `Phase 0${activePhase} Only`}
+                        {activePhase === 'All' ? 'All Phases' : `Phase 0${activePhase} Only`} 
+                        {timeFilter === 'today' && ' (Today)'}
                     </span>
                 </h2>
                 <button onClick={downloadCSV} className="flex items-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded-xl text-sm transition">
@@ -158,7 +182,7 @@ const UserDashboard = () => {
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {report.length === 0 ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-slate-500">No data found for this phase.</td></tr>
+                                <tr><td colSpan="7" className="p-8 text-center text-slate-500">No data found for this filter.</td></tr>
                             ) : report.map((row, index) => (
                                 <tr key={index} className="hover:bg-white/5 transition duration-200">
                                     <td className="p-4 font-bold text-white flex items-center gap-3">
@@ -180,7 +204,6 @@ const UserDashboard = () => {
                                 </tr>
                             ))}
                         </tbody>
-                        {/* 🔥 NEW: TOTALS ROW */}
                         <tfoot className="bg-black/40 border-t border-white/10 font-bold text-white">
                             <tr>
                                 <td className="p-5 text-right uppercase tracking-wider text-slate-400 text-xs">Total Overall:</td>

@@ -17,12 +17,10 @@ const UserAgentDash = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // 🔥 NEW: Save Button ekata adala state eka
   const [pendingSaves, setPendingSaves] = useState(new Set());
 
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
-  const userId = localStorage.getItem('userId');
   const userName = localStorage.getItem('name');
 
   // --- 1. FETCH DATA ---
@@ -41,7 +39,12 @@ const UserAgentDash = () => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchMyContacts(); }, []);
+  useEffect(() => { 
+      fetchMyContacts(); 
+      // Auto refresh to update unread counts
+      const interval = setInterval(fetchMyContacts, 10000); 
+      return () => clearInterval(interval);
+  }, []);
 
   // --- 2. LOGIC: UPDATE STATUS Lcoally ---
   const handleUpdateRow = (id, field, value) => {
@@ -66,11 +69,9 @@ const UserAgentDash = () => {
       }
 
       setContacts(prev => prev.map(c => c._id === id ? { ...c, ...updatedFields } : c));
-      // 🔥 Pending list ekata add karanawa
       setPendingSaves(prev => new Set(prev).add(id));
   };
 
-  // 🔥 NEW: SAVE TO DATABASE FUNCTION
   const handleSaveRow = async (id) => {
       const contactToSave = contacts.find(c => c._id === id);
       if(!contactToSave) return;
@@ -94,7 +95,6 @@ const UserAgentDash = () => {
                 next.delete(id);
                 return next;
             });
-            // Optional alert: alert("Saved Successfully!");
         } else {
             alert("Failed to save!");
         }
@@ -104,13 +104,11 @@ const UserAgentDash = () => {
       }
   };
 
-  // --- 3. OPEN CHAT ---
   const handleOpenChat = (contact) => {
       setChatTarget(contact);
       setViewMode('inbox');
   };
 
-  // --- 4. CSV EXPORT ---
   const exportToCSV = () => {
       const headers = ["Phone", "Name", "Phase", "Method", "Attempts", "Status", "Remarks"];
       const exportData = activePhase === 'All' ? contacts : contacts.filter(c => c.phase === activePhase);
@@ -132,9 +130,7 @@ const UserAgentDash = () => {
       navigate('/login');
   };
 
-  const phaseContacts = activePhase === 'All' 
-    ? contacts 
-    : contacts.filter(c => c.phase === activePhase);
+  const phaseContacts = activePhase === 'All' ? contacts : contacts.filter(c => c.phase === activePhase);
 
   const filteredContacts = phaseContacts.filter(c => {
       const pNum = c.phoneNumber || c.phone_number || "";
@@ -143,14 +139,15 @@ const UserAgentDash = () => {
   });
 
   const totalInPhase = phaseContacts.length;
-  
   const completedInPhase = phaseContacts.filter(c => {
       const status = c.callStatus;
       const attempts = parseInt(c.attemptCount || 0);
       return ['Answered', 'Reject', 'No Answer'].includes(status) || attempts > 0;
   }).length;
-
   const pendingInPhase = totalInPhase - completedInPhase;
+
+  // 🔥 NEW: Calculate overall unread count for Agent
+  const totalUnread = contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -168,7 +165,6 @@ const UserAgentDash = () => {
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-hidden">
-        
         <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"/>
         
         {/* --- HEADER --- */}
@@ -190,8 +186,14 @@ const UserAgentDash = () => {
                     <button onClick={() => setViewMode('campaign')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'campaign' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                         <Phone size={16}/> Campaigns
                     </button>
-                    <button onClick={() => setViewMode('inbox')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'inbox' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                    <button onClick={() => setViewMode('inbox')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all relative ${viewMode === 'inbox' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                         <MessageSquare size={16}/> Inbox
+                        {/* 🔥 NEW: Unread Count Badge */}
+                        {totalUnread > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full animate-pulse shadow-lg border-2 border-[#0B1120]">
+                                {totalUnread}
+                            </span>
+                        )}
                     </button>
                 </div>
                 <button onClick={handleLogout} className="p-2.5 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-colors text-slate-400 border border-transparent hover:border-red-500/20" title="Logout">
@@ -202,29 +204,15 @@ const UserAgentDash = () => {
 
         {/* --- BODY --- */}
         <div className="p-6 max-w-[1800px] mx-auto z-10 relative">
-            
             {viewMode === 'campaign' ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    
                     {/* PHASE TABS */}
                     <div className="flex items-center gap-4 border-b border-white/10 pb-1">
-                        <button 
-                            onClick={() => { setActivePhase('All'); setCurrentPage(1); }}
-                            className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activePhase === 'All' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                        >
-                            <Filter size={16}/> OVERALL
-                        </button>
-
+                        <button onClick={() => { setActivePhase('All'); setCurrentPage(1); }} className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activePhase === 'All' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}><Filter size={16}/> OVERALL</button>
                         {[1, 2, 3].map(phase => (
-                            <button 
-                                key={phase}
-                                onClick={() => { setActivePhase(phase); setCurrentPage(1); }}
-                                className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activePhase === phase ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                            >
+                            <button key={phase} onClick={() => { setActivePhase(phase); setCurrentPage(1); }} className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activePhase === phase ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
                                 <Layers size={16}/> PHASE 0{phase}
-                                <span className="bg-white/10 text-white px-1.5 py-0.5 rounded text-[10px]">
-                                    {contacts.filter(c => c.phase === phase).length}
-                                </span>
+                                <span className="bg-white/10 text-white px-1.5 py-0.5 rounded text-[10px]">{contacts.filter(c => c.phase === phase).length}</span>
                             </button>
                         ))}
                     </div>
@@ -232,12 +220,7 @@ const UserAgentDash = () => {
                     {/* OVERVIEW CARDS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-[#1e293b]/40 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase mb-2">
-                                    {activePhase === 'All' ? 'Total Assigned (All Phases)' : `Assigned (Phase 0${activePhase})`}
-                                </p>
-                                <h3 className="text-5xl font-bold text-white tracking-tight">{totalInPhase}</h3>
-                            </div>
+                            <div><p className="text-slate-400 text-xs font-bold uppercase mb-2">{activePhase === 'All' ? 'Total Assigned (All Phases)' : `Assigned (Phase 0${activePhase})`}</p><h3 className="text-5xl font-bold text-white tracking-tight">{totalInPhase}</h3></div>
                             <div className="p-4 bg-blue-500/10 rounded-2xl text-blue-400"><User size={32}/></div>
                         </div>
                         <div className="bg-[#1e293b]/40 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
@@ -275,7 +258,7 @@ const UserAgentDash = () => {
                                     <th className="p-4 text-center">Chat</th>
                                     <th className="p-4 text-center w-40">Status</th>
                                     <th className="p-4 text-left w-1/4">Remark</th>
-                                    <th className="p-4 text-center">Action</th> {/* 🔥 NEW COLUMN */}
+                                    <th className="p-4 text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -286,80 +269,40 @@ const UserAgentDash = () => {
                                         <td className="p-4 text-slate-500 text-left">{(currentPage - 1) * itemsPerPage + index + 1}</td>
                                         
                                         <td className="p-4 text-left">
-                                            <div className="font-bold text-white text-base">{contact.phoneNumber}</div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="font-bold text-white text-base">{contact.phoneNumber}</div>
+                                                {contact.unreadCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse">{contact.unreadCount}</span>}
+                                            </div>
                                             <div className="text-xs text-slate-500">{contact.name || "Guest"}</div>
                                         </td>
 
-                                        {activePhase === 'All' && (
-                                            <td className="p-4 text-center">
-                                                <span className="bg-white/10 text-slate-300 px-2 py-1 rounded text-xs font-bold">P{contact.phase || 1}</span>
-                                            </td>
-                                        )}
+                                        {activePhase === 'All' && <td className="p-4 text-center"><span className="bg-white/10 text-slate-300 px-2 py-1 rounded text-xs font-bold">P{contact.phase || 1}</span></td>}
                                         
                                         <td className="p-4 text-center">
-                                            <select 
-                                                value={contact.attemptMethod || ''} 
-                                                onChange={(e) => handleUpdateRow(contact._id, 'attemptMethod', e.target.value)}
-                                                className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-24 text-center cursor-pointer"
-                                            >
-                                                <option value="">-</option>
-                                                <option value="3CX">3CX</option>
-                                                <option value="Direct">Direct</option>
-                                                <option value="WhatsApp">WhatsApp</option>
+                                            <select value={contact.attemptMethod || ''} onChange={(e) => handleUpdateRow(contact._id, 'attemptMethod', e.target.value)} className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-24 text-center cursor-pointer">
+                                                <option value="">-</option><option value="3CX">3CX</option><option value="Direct">Direct</option><option value="WhatsApp">WhatsApp</option>
                                             </select>
                                         </td>
-
                                         <td className="p-4 text-center">
-                                            <select 
-                                                value={contact.attemptCount || '0'} 
-                                                onChange={(e) => handleUpdateRow(contact._id, 'attemptCount', e.target.value)}
-                                                className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-16 text-center cursor-pointer"
-                                            >
-                                                {[0,1,2,3,4,5].map(num => <option key={num} value={num}>{num}</option>)}
-                                                <option value="5+">5+</option>
+                                            <select value={contact.attemptCount || '0'} onChange={(e) => handleUpdateRow(contact._id, 'attemptCount', e.target.value)} className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-16 text-center cursor-pointer">
+                                                {[0,1,2,3,4,5].map(num => <option key={num} value={num}>{num}</option>)}<option value="5+">5+</option>
                                             </select>
                                         </td>
-
                                         <td className="p-4 text-center">
                                             <button onClick={() => handleOpenChat(contact)} className="p-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition border border-indigo-500/20 shadow-md">
                                                 <MessageSquare size={16}/>
                                             </button>
                                         </td>
-
                                         <td className="p-4 text-center">
-                                            <select 
-                                                value={contact.callStatus || 'Pending'}
-                                                onChange={(e) => handleUpdateRow(contact._id, 'callStatus', e.target.value)}
-                                                className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer border border-transparent w-32 text-center transition-all ${getStatusColor(contact.callStatus)}`}
-                                            >
-                                                <option value="Pending">Pending</option>
-                                                <option value="Answered">Answered</option>
-                                                <option value="No Answer">No Answer</option>
-                                                <option value="Reject">Reject</option>
+                                            <select value={contact.callStatus || 'Pending'} onChange={(e) => handleUpdateRow(contact._id, 'callStatus', e.target.value)} className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer border border-transparent w-32 text-center transition-all ${getStatusColor(contact.callStatus)}`}>
+                                                <option value="Pending">Pending</option><option value="Answered">Answered</option><option value="No Answer">No Answer</option><option value="Reject">Reject</option>
                                             </select>
                                         </td>
-
                                         <td className="p-4 text-left">
-                                            <input 
-                                                type="text" 
-                                                placeholder="Write a remark..." 
-                                                value={contact.remarks || ''} 
-                                                onChange={(e) => handleUpdateRow(contact._id, 'remarks', e.target.value)} 
-                                                className="bg-transparent border-b border-white/10 w-full outline-none text-slate-300 text-sm py-1 focus:border-indigo-500 transition-colors placeholder-slate-700"
-                                            />
+                                            <input type="text" placeholder="Write a remark..." value={contact.remarks || ''} onChange={(e) => handleUpdateRow(contact._id, 'remarks', e.target.value)} className="bg-transparent border-b border-white/10 w-full outline-none text-slate-300 text-sm py-1 focus:border-indigo-500 transition-colors placeholder-slate-700"/>
                                         </td>
-
-                                        {/* 🔥 NEW: SAVE BUTTON */}
                                         <td className="p-4 text-center">
-                                            <button 
-                                                onClick={() => handleSaveRow(contact._id)}
-                                                disabled={!pendingSaves.has(contact._id)}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-md ${
-                                                    pendingSaves.has(contact._id) 
-                                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse' 
-                                                    : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
-                                                }`}
-                                            >
+                                            <button onClick={() => handleSaveRow(contact._id)} disabled={!pendingSaves.has(contact._id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-md ${pendingSaves.has(contact._id) ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse' : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'}`}>
                                                 {pendingSaves.has(contact._id) ? 'Save' : 'Saved'}
                                             </button>
                                         </td>
@@ -376,7 +319,6 @@ const UserAgentDash = () => {
                             <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 bg-white/5 rounded hover:bg-white/10 disabled:opacity-50"><ChevronRight size={16}/></button>
                         </div>
                     </div>
-
                 </div>
             ) : (
                 <div className="h-[82vh] rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-in fade-in slide-in-from-right-4 duration-500">

@@ -38,7 +38,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   
   const [selectedAgentFilter, setSelectedAgentFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
-  const [selectedPhaseFilter, setSelectedPhaseFilter] = useState('All'); // Added Phase Filter
+  const [selectedPhaseFilter, setSelectedPhaseFilter] = useState('All'); 
 
   const [showLeadDetails, setShowLeadDetails] = useState(true);
 
@@ -72,6 +72,10 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [newTemplateTitle, setNewTemplateTitle] = useState("");
   const [newTemplateMsg, setNewTemplateMsg] = useState("");
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  
+  // 🔥 NEW: For uploading media to quick reply
+  const [uploadingTemplateMedia, setUploadingTemplateMedia] = useState(false);
+  const [templateMediaPreview, setTemplateMediaPreview] = useState(null);
 
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role'); 
@@ -124,19 +128,55 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { console.error(err); }
   };
 
-  const handleCreateQuickReply = async () => {
-      if(!newTemplateTitle || !newTemplateMsg) return alert("Please fill both fields");
+  // 🔥 NEW: Upload media for quick reply
+  const handleTemplateMediaUpload = async (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      setUploadingTemplateMedia(true);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", UPLOAD_PRESET); 
+      formData.append("cloud_name", CLOUD_NAME);
+
       try {
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
+          const data = await res.json();
+          if(data.secure_url) {
+              let type = 'document';
+              if(file.type.startsWith('image')) type = 'image';
+              else if(file.type.startsWith('video')) type = 'video';
+              else if(file.type.startsWith('audio')) type = 'audio';
+              setTemplateMediaPreview({ url: data.secure_url, type: type, name: file.name });
+          }
+      } catch(err) { alert("Upload Failed!"); }
+      finally { setUploadingTemplateMedia(false); }
+  };
+
+  // 🔥 UPDATED: Create Quick Reply with Media
+  const handleCreateQuickReply = async () => {
+      if(!newTemplateTitle) return alert("Title is required!");
+      if(!newTemplateMsg && !templateMediaPreview) return alert("Please enter text or attach media!");
+
+      try {
+          const payload = { 
+              title: newTemplateTitle, 
+              message: newTemplateMsg,
+              mediaUrl: templateMediaPreview ? templateMediaPreview.url : null,
+              mediaType: templateMediaPreview ? templateMediaPreview.type : 'text'
+          };
+
           const res = await fetch(`${API_BASE_URL}/api/quick-replies/add`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
-              body: JSON.stringify({ title: newTemplateTitle, message: newTemplateMsg })
+              body: JSON.stringify(payload)
           });
           if(res.ok) {
               const saved = await res.json();
               setTemplates([saved, ...templates]);
               setIsCreatingTemplate(false);
-              setNewTemplateTitle(""); setNewTemplateMsg("");
+              setNewTemplateTitle(""); 
+              setNewTemplateMsg("");
+              setTemplateMediaPreview(null);
           }
       } catch(err) { alert("Error saving quick reply"); }
   };
@@ -149,8 +189,16 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { alert("Delete failed"); }
   };
 
-  const handleSelectTemplate = (msg) => {
-      setNewMessage(msg); 
+  // 🔥 UPDATED: Select Template & load media preview
+  const handleSelectTemplate = (t) => {
+      setNewMessage(t.message || ""); 
+      if (t.media_url || t.mediaUrl) {
+          setMediaPreview({
+              url: t.media_url || t.mediaUrl,
+              type: t.media_type || t.mediaType || 'document',
+              name: 'Attached Media'
+          });
+      }
       setShowTemplates(false); 
   };
 
@@ -584,69 +632,63 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 </div>
                 
                 {userRole !== 'agent' && (
-    <div className="space-y-2">
-        <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-[#1e293b] border-white/5' : 'bg-gray-100 border-gray-200'}`}>
-            {['New Chat', 'Imported', 'Assigned', 'All'].map(tab => {
-                // 🔥 Unread counts calculate kirima
-                let badgeCount = 0;
-                if (tab === 'New Chat') {
-                    badgeCount = contacts.filter(c => !c.assignedTo && c.lastMessage !== 'Created Manually' && c.lastMessage !== 'Imported via CSV' && c.unreadCount > 0).length;
-                } else if (tab === 'Assigned') {
-                    badgeCount = contacts.filter(c => c.assignedTo && c.unreadCount > 0).length;
-                } else if (tab === 'All') {
-                    badgeCount = contacts.filter(c => c.unreadCount > 0).length;
-                }
-
-                return (
-                    <button 
-                        key={tab} 
-                        onClick={() => setActiveTab(tab)} 
-                        className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}
-                    >
-                        {tab}
-                        {badgeCount > 0 && (
-                            <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">
-                                {badgeCount}
-                            </span>
+                    <div className="space-y-2">
+                        <div className={`flex p-1 rounded-xl border ${isDarkMode ? 'bg-[#1e293b] border-white/5' : 'bg-gray-100 border-gray-200'}`}>
+                            {['New Chat', 'Imported', 'Assigned', 'All'].map(tab => {
+                                let badgeCount = 0;
+                                if (tab === 'New Chat') {
+                                    badgeCount = contacts.filter(c => !c.assignedTo && c.lastMessage !== 'Created Manually' && c.lastMessage !== 'Imported via CSV' && c.unreadCount > 0).length;
+                                } else if (tab === 'Assigned') {
+                                    badgeCount = contacts.filter(c => c.assignedTo && c.unreadCount > 0).length;
+                                } else if (tab === 'All') {
+                                    badgeCount = contacts.filter(c => c.unreadCount > 0).length;
+                                }
+                                return (
+                                    <button 
+                                        key={tab} 
+                                        onClick={() => setActiveTab(tab)} 
+                                        className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all duration-300 ${activeTab === tab ? `${theme.primary} text-white shadow-lg` : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200')}`}
+                                    >
+                                        {tab}
+                                        {badgeCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">{badgeCount}</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        
+                        {(activeTab === 'Assigned' || activeTab === 'All') && (
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                        <option value="All">All Agents</option>
+                                        {agents.map(a => (<option key={a._id} value={a._id}>{a.name}</option>))}
+                                    </select>
+                                </div>
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Tag size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                    <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                        <option value="All">All Status</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="answered">Answered</option>
+                                        <option value="reject">Reject</option>
+                                        <option value="no answer">No Answer</option>
+                                    </select>
+                                </div>
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><ClipboardList size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                    <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                        <option value="All">All Phases</option>
+                                        <option value="1">Phase 1</option>
+                                        <option value="2">Phase 2</option>
+                                        <option value="3">Phase 3</option>
+                                        <option value="4">Phase 4</option>
+                                    </select>
+                                </div>
+                            </div>
                         )}
-                    </button>
-                );
-            })}
-        </div>
-        
-        {(activeTab === 'Assigned' || activeTab === 'All') && (
-            <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
-                        <option value="All">All Agents</option>
-                        {agents.map(a => (<option key={a._id} value={a._id}>{a.name}</option>))}
-                    </select>
-                </div>
-                <div className="relative flex-1">
-                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Tag size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                    <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
-                        <option value="All">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="answered">Answered</option>
-                        <option value="reject">Reject</option>
-                        <option value="no answer">No Answer</option>
-                    </select>
-                </div>
-                <div className="relative flex-1">
-                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><ClipboardList size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                    <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 ${theme.ring} border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
-                        <option value="All">All Phases</option>
-                        <option value="1">Phase 1</option>
-                        <option value="2">Phase 2</option>
-                        <option value="3">Phase 3</option>
-                        <option value="4">Phase 4</option>
-                    </select>
-                </div>
-            </div>
-        )}
-    </div>
-)}
+                    </div>
+                )}
                 
                 <div className="flex items-center gap-2">
                     {userRole !== 'agent' && (
@@ -830,7 +872,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
                                     {/* QUICK REPLIES MODAL */}
                                     {showTemplates && (
-                                        <div className={`absolute bottom-16 left-2 w-72 border rounded-2xl shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-2 fade-in ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
+                                        <div className={`absolute bottom-16 left-2 w-80 border rounded-2xl shadow-2xl p-3 z-50 animate-in slide-in-from-bottom-2 fade-in ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
                                             <div className={`flex justify-between items-center mb-3 pb-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
                                                 <h3 className={`font-bold text-xs flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}><Zap size={14} className="text-amber-400"/> Quick Replies</h3>
                                                 <button onClick={() => setShowTemplates(false)}><X size={14} className="text-slate-400 hover:text-red-500"/></button>
@@ -838,12 +880,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                             
                                             <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-2 mb-2">
                                                 {templates.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">No templates yet.</p> : templates.map(t => (
-                                                    <div key={t._id} className={`p-2 rounded-lg group cursor-pointer ${isDarkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'}`} onClick={() => handleSelectTemplate(t.message)}>
+                                                    <div key={t._id} className={`p-2 rounded-lg group cursor-pointer ${isDarkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'}`} onClick={() => handleSelectTemplate(t)}>
                                                         <div className="flex justify-between items-start">
-                                                            <h4 className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t.title}</h4>
+                                                            <h4 className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                                                {t.title}
+                                                                {(t.media_url || t.mediaUrl) && <Paperclip size={10} className="inline ml-1 text-blue-400"/>}
+                                                            </h4>
                                                             <button onClick={(e) => { e.stopPropagation(); handleDeleteQuickReply(t._id); }} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"><Trash2 size={12}/></button>
                                                         </div>
-                                                        <p className="text-[10px] text-slate-400 truncate">{t.message}</p>
+                                                        <p className="text-[10px] text-slate-400 truncate">{t.message || 'Media File'}</p>
                                                     </div>
                                                 ))}
                                             </div>
@@ -852,9 +897,22 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                                 <div className={`space-y-2 p-2 rounded-lg border ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-gray-50 border-gray-200'}`}>
                                                     <input type="text" placeholder="Title" className={`w-full bg-transparent border-b text-xs p-1 outline-none ${isDarkMode ? 'border-white/10 text-white' : 'border-gray-300 text-gray-900'}`} value={newTemplateTitle} onChange={(e) => setNewTemplateTitle(e.target.value)} />
                                                     <textarea placeholder="Message content..." className={`w-full bg-transparent border-b text-xs p-1 outline-none resize-none ${isDarkMode ? 'border-white/10 text-slate-300' : 'border-gray-300 text-gray-600'}`} rows={2} value={newTemplateMsg} onChange={(e) => setNewTemplateMsg(e.target.value)} />
+                                                    
+                                                    {/* 🔥 NEW: MEDIA ATTACH FOR QUICK REPLY */}
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <label className={`cursor-pointer p-1.5 rounded bg-white/5 hover:bg-white/10 transition text-slate-400 flex items-center gap-1 text-[10px]`}>
+                                                            {uploadingTemplateMedia ? <Loader className="animate-spin" size={12}/> : <Paperclip size={12}/>}
+                                                            {templateMediaPreview ? "Change Media" : "Attach Media"}
+                                                            <input type="file" className="hidden" onChange={handleTemplateMediaUpload} accept="image/*,video/*,application/pdf,application/msword,audio/*"/>
+                                                        </label>
+                                                        {templateMediaPreview && (
+                                                            <span className="text-[10px] text-emerald-400 truncate w-24">{templateMediaPreview.name}</span>
+                                                        )}
+                                                    </div>
+
                                                     <div className="flex gap-2">
-                                                        <button onClick={() => setIsCreatingTemplate(false)} className="flex-1 py-1 text-xs text-slate-400 hover:bg-black/10 rounded">Cancel</button>
-                                                        <button onClick={handleCreateQuickReply} className="flex-1 py-1 text-xs bg-amber-500 text-black font-bold rounded hover:bg-amber-400">Save</button>
+                                                        <button onClick={() => {setIsCreatingTemplate(false); setTemplateMediaPreview(null);}} className="flex-1 py-1 text-xs text-slate-400 hover:bg-black/10 rounded">Cancel</button>
+                                                        <button onClick={handleCreateQuickReply} disabled={uploadingTemplateMedia} className="flex-1 py-1 text-xs bg-amber-500 text-black font-bold rounded hover:bg-amber-400 disabled:opacity-50">Save</button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -863,7 +921,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                         </div>
                                     )}
 
-                                    {/* 🔥 NEW: OFFICIAL TEMPLATES MODAL */}
+                                    {/* OFFICIAL TEMPLATES MODAL */}
                                     {showSendTemplateModal && (
                                         <div className={`absolute bottom-16 left-12 w-80 border rounded-2xl shadow-2xl p-4 z-50 animate-in slide-in-from-bottom-2 fade-in ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-white border-gray-200'}`}>
                                             <div className={`flex justify-between items-center mb-3 pb-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
