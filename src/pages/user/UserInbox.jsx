@@ -6,7 +6,7 @@ import {
   FileText, Play, Video as VideoIcon, Download, ChevronRight, Users, 
   RefreshCw, Palette, Type, Minus, Plus, Zap, ArrowUp, ArrowDown, 
   PlusCircle, Sun, Moon, ClipboardList, Tag, Filter, MessageSquarePlus, FileSpreadsheet,
-  LayoutTemplate
+  LayoutTemplate, Reply // 🔥 NEW: Reply Icon
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
@@ -73,9 +73,11 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [newTemplateMsg, setNewTemplateMsg] = useState("");
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
   
-  // 🔥 NEW: For uploading media to quick reply
   const [uploadingTemplateMedia, setUploadingTemplateMedia] = useState(false);
   const [templateMediaPreview, setTemplateMediaPreview] = useState(null);
+
+  // 🔥 NEW: Reply State
+  const [replyingTo, setReplyingTo] = useState(null);
 
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role'); 
@@ -128,7 +130,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { console.error(err); }
   };
 
-  // 🔥 NEW: Upload media for quick reply
   const handleTemplateMediaUpload = async (e) => {
       const file = e.target.files[0];
       if(!file) return;
@@ -152,7 +153,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       finally { setUploadingTemplateMedia(false); }
   };
 
-  // 🔥 UPDATED: Create Quick Reply with Media
   const handleCreateQuickReply = async () => {
       if(!newTemplateTitle) return alert("Title is required!");
       if(!newTemplateMsg && !templateMediaPreview) return alert("Please enter text or attach media!");
@@ -185,11 +185,10 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       if(!window.confirm("Delete this quick reply?")) return;
       try {
           await fetch(`${API_BASE_URL}/api/quick-replies/${id}`, { method: 'DELETE', headers: { token: `Bearer ${token}` } });
-          setTemplates(templates.filter(t => t._id !== id));
+          setTemplates(templates.filter(t => t.id !== id)); // 🔥 FIXED: Use t.id instead of t._id
       } catch(err) { alert("Delete failed"); }
   };
 
-  // 🔥 UPDATED: Select Template & load media preview
   const handleSelectTemplate = (t) => {
       setNewMessage(t.message || ""); 
       if (t.media_url || t.mediaUrl) {
@@ -271,7 +270,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     }
   }, [selectedContact, token]);
 
-  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, mediaPreview]);
+  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, mediaPreview, replyingTo]);
 
   const formatPhoneNumber = (phone) => {
       let cleaned = phone.replace(/\D/g, '');
@@ -386,7 +385,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             to: selectedContact.phoneNumber,
             text: textToSend,
             type: typeToSend,
-            mediaUrl: mediaToSend
+            mediaUrl: mediaToSend,
+            // 🔥 NEW: Reply to Message ID
+            replyToMessageId: replyingTo ? replyingTo.whatsapp_message_id : null
           };
 
           const res = await fetch(`${API_BASE_URL}/api/messages/send`, {
@@ -400,10 +401,11 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               setMessages(prev => [...prev, sentMsg]);
               setNewMessage("");
               setMediaPreview(null);
+              setReplyingTo(null); // Clear reply state
               setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
           } else {
               const errData = await res.json();
-              alert(`Message Failed: ${errData.message || 'WhatsApp 24h Window Rule might apply. Send an approved template instead.'}`);
+              alert(`Message Failed: ${errData.message || 'WhatsApp 24h Window Rule might apply.'}`);
           }
       } catch(err) { alert("Message Failed!"); } 
       finally { setSending(false); }
@@ -810,7 +812,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
 
                         <div className={`flex-1 overflow-y-auto p-6 space-y-3 z-10 ${isDarkMode ? 'bg-[#0b1221]' : 'bg-transparent'}`}>
                             {messages.map((msg, index) => (
-                                <div key={index} className={`flex ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
+                                <div key={index} className={`flex group relative ${msg.direction === 'outbound' || msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
+                                    
+                                    {/* 🔥 NEW: Reply Button (Left Side for incoming) */}
+                                    {(msg.direction !== 'outbound' && msg.sender !== 'me' && msg.whatsapp_message_id) && (
+                                        <button onClick={() => setReplyingTo(msg)} className="hidden group-hover:flex absolute top-1/2 -right-10 -translate-y-1/2 p-2 rounded-full bg-black/20 text-slate-400 hover:text-white hover:bg-emerald-500/80 transition shadow-lg">
+                                            <Reply size={14} />
+                                        </button>
+                                    )}
+
                                     <div className={`max-w-[75%] p-4 rounded-2xl shadow-sm backdrop-blur-sm border 
                                         ${msg.direction === 'outbound' || msg.sender === 'me' 
                                             ? `${theme.bubbleMe} text-white rounded-tr-none ${isDarkMode ? 'border-white/10' : 'border-transparent'}` 
@@ -823,6 +833,13 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                             {(msg.direction === 'outbound' || msg.sender === 'me') && <CheckCheck size={12}/>}
                                         </div>
                                     </div>
+
+                                    {/* 🔥 NEW: Reply Button (Right Side for outbound) */}
+                                    {(msg.direction === 'outbound' || msg.sender === 'me') && msg.whatsapp_message_id && (
+                                        <button onClick={() => setReplyingTo(msg)} className="hidden group-hover:flex absolute top-1/2 -left-10 -translate-y-1/2 p-2 rounded-full bg-black/20 text-slate-400 hover:text-white hover:bg-emerald-500/80 transition shadow-lg">
+                                            <Reply size={14} />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                             <div ref={scrollRef} />
@@ -844,6 +861,19 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                             <div><p className={`text-sm font-bold truncate w-48 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{mediaPreview.name}</p><p className={`text-xs ${theme.text} uppercase font-bold`}>{mediaPreview.type}</p></div>
                                         </div>
                                         <button onClick={() => setMediaPreview(null)} className="p-2 hover:bg-red-500 hover:text-white rounded-full transition text-slate-400 bg-transparent"><X size={16}/></button>
+                                    </div>
+                                )}
+
+                                {/* 🔥 NEW: Reply Preview Box */}
+                                {replyingTo && (
+                                    <div className={`p-3 border-b-2 border-emerald-500 flex justify-between items-start animate-in slide-in-from-bottom-2 ${isDarkMode ? 'bg-black/40 text-slate-300' : 'bg-gray-100 text-gray-700'}`}>
+                                        <div className="flex-1 overflow-hidden pr-2 border-l-4 border-emerald-500 pl-2">
+                                            <p className="text-[10px] font-bold text-emerald-500 mb-0.5">Replying to {replyingTo.sender === 'me' || replyingTo.direction === 'outbound' ? 'Yourself' : 'Customer'}</p>
+                                            <p className="text-xs truncate text-slate-400">{replyingTo.text || replyingTo.content || 'Media Message'}</p>
+                                        </div>
+                                        <button onClick={() => setReplyingTo(null)} className="text-slate-400 hover:text-red-500 p-1 bg-white/5 rounded-md">
+                                            <X size={14} />
+                                        </button>
                                     </div>
                                 )}
 
@@ -880,13 +910,14 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                             
                                             <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-2 mb-2">
                                                 {templates.length === 0 ? <p className="text-xs text-slate-500 text-center py-4">No templates yet.</p> : templates.map(t => (
-                                                    <div key={t._id} className={`p-2 rounded-lg group cursor-pointer ${isDarkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'}`} onClick={() => handleSelectTemplate(t)}>
+                                                    <div key={t.id || t._id} className={`p-2 rounded-lg group cursor-pointer ${isDarkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-50 hover:bg-gray-100'}`} onClick={() => handleSelectTemplate(t)}>
                                                         <div className="flex justify-between items-start">
                                                             <h4 className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                                                                 {t.title}
                                                                 {(t.media_url || t.mediaUrl) && <Paperclip size={10} className="inline ml-1 text-blue-400"/>}
                                                             </h4>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteQuickReply(t._id); }} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"><Trash2 size={12}/></button>
+                                                            {/* 🔥 FIXED: Use t.id here instead of t._id */}
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteQuickReply(t.id); }} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"><Trash2 size={12}/></button>
                                                         </div>
                                                         <p className="text-[10px] text-slate-400 truncate">{t.message || 'Media File'}</p>
                                                     </div>
@@ -898,7 +929,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                                     <input type="text" placeholder="Title" className={`w-full bg-transparent border-b text-xs p-1 outline-none ${isDarkMode ? 'border-white/10 text-white' : 'border-gray-300 text-gray-900'}`} value={newTemplateTitle} onChange={(e) => setNewTemplateTitle(e.target.value)} />
                                                     <textarea placeholder="Message content..." className={`w-full bg-transparent border-b text-xs p-1 outline-none resize-none ${isDarkMode ? 'border-white/10 text-slate-300' : 'border-gray-300 text-gray-600'}`} rows={2} value={newTemplateMsg} onChange={(e) => setNewTemplateMsg(e.target.value)} />
                                                     
-                                                    {/* 🔥 NEW: MEDIA ATTACH FOR QUICK REPLY */}
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <label className={`cursor-pointer p-1.5 rounded bg-white/5 hover:bg-white/10 transition text-slate-400 flex items-center gap-1 text-[10px]`}>
                                                             {uploadingTemplateMedia ? <Loader className="animate-spin" size={12}/> : <Paperclip size={12}/>}
