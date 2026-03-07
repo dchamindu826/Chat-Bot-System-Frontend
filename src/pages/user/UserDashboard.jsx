@@ -1,24 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import MainLayout from '../../layouts/MainLayout';
-import { Users, PhoneCall, MessageCircle, TrendingUp, BarChart2, Download, Layers, Filter, Clock } from 'lucide-react';
+import { Users, PhoneCall, MessageCircle, TrendingUp, BarChart2, Download, Layers, Filter, Clock, Calendar } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const UserDashboard = () => {
   const [activePhase, setActivePhase] = useState('All'); 
-  const [timeFilter, setTimeFilter] = useState('All'); // 🔥 NEW: Time filter state
+  const [timeFilter, setTimeFilter] = useState('All'); 
+  
+  // 🔥 NEW: Date range states
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   
   const [stats, setStats] = useState({ totalCalls: 0, totalMessages: 0, responseRate: 0 });
   const [report, setReport] = useState([]);
   const [loading, setLoading] = useState(false);
   const token = localStorage.getItem('token');
 
-  const fetchData = async (phase, time) => {
+  const fetchData = async (phase, time, start, end) => {
     setLoading(true);
     try {
         let queryParams = new URLSearchParams();
         if (phase !== 'All') queryParams.append('phase', phase);
-        if (time !== 'All') queryParams.append('time', time);
+        
+        // 🔥 Handle Time Filters
+        if (time === 'today') {
+            queryParams.append('time', 'today');
+        } else if (time === 'custom') {
+            if (start) queryParams.append('startDate', start);
+            if (end) queryParams.append('endDate', end);
+        }
         
         const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
@@ -40,8 +51,12 @@ const UserDashboard = () => {
   };
 
   useEffect(() => {
-    fetchData(activePhase, timeFilter);
-  }, [activePhase, timeFilter]);
+    // Custom filter දාලා තියෙනකොට Dates දෙකම select කරනකන් API call එක යවන්නේ නෑ
+    if (timeFilter === 'custom' && (!startDate || !endDate)) {
+        return;
+    }
+    fetchData(activePhase, timeFilter, startDate, endDate);
+  }, [activePhase, timeFilter, startDate, endDate]);
 
   const downloadCSV = () => {
     if (report.length === 0) return alert("No data available to download!");
@@ -62,20 +77,31 @@ const UserDashboard = () => {
         + headers.join(",") + "\n" 
         + rows.map(e => e.join(",")).join("\n");
 
+    let timeLabel = timeFilter;
+    if (timeFilter === 'custom') timeLabel = `${startDate}_to_${endDate}`;
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Campaign_Report_${activePhase}_${timeFilter}.csv`);
+    link.setAttribute("download", `Campaign_Report_${activePhase}_${timeLabel}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Helper function to render Current View text dynamically
+  const getCurrentViewText = () => {
+      if (timeFilter === 'today') return "Today's Stats";
+      if (timeFilter === 'custom' && startDate && endDate) return `${startDate} to ${endDate}`;
+      if (timeFilter === 'custom') return "Select Date Range";
+      return activePhase === 'All' ? "All Phases" : `Phase 0${activePhase}`;
   };
 
   return (
     <MainLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
         
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-[#1e293b]/60 p-4 rounded-3xl border border-white/5 backdrop-blur-md">
+        <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-[#1e293b]/60 p-4 rounded-3xl border border-white/5 backdrop-blur-md">
             <div>
                 <h1 className="text-2xl font-bold text-white flex items-center gap-3">
                     <BarChart2 className="text-indigo-400"/> Campaign Overview
@@ -83,8 +109,30 @@ const UserDashboard = () => {
                 <p className="text-slate-400 text-sm">Monitor agent performance across campaign phases</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-                {/* 🔥 NEW: Time Filter - Ada Dawase Progress eka balanna */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center flex-wrap justify-end">
+                
+                {/* 🔥 Custom Date Picker View */}
+                {timeFilter === 'custom' && (
+                    <div className="flex items-center gap-2 bg-[#0f172a]/50 p-1.5 rounded-xl border border-white/10 animate-in fade-in slide-in-from-right-4">
+                        <input 
+                            type="date" 
+                            value={startDate} 
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="bg-transparent text-sm text-slate-300 outline-none px-2 cursor-pointer"
+                            style={{ colorScheme: 'dark' }}
+                        />
+                        <span className="text-slate-500 text-xs font-bold">TO</span>
+                        <input 
+                            type="date" 
+                            value={endDate} 
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="bg-transparent text-sm text-slate-300 outline-none px-2 cursor-pointer"
+                            style={{ colorScheme: 'dark' }}
+                        />
+                    </div>
+                )}
+
+                {/* Time Filter Buttons */}
                 <div className="flex bg-[#0f172a]/50 p-1.5 rounded-xl border border-white/10">
                     <button
                         onClick={() => setTimeFilter('All')}
@@ -97,6 +145,12 @@ const UserDashboard = () => {
                         className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${timeFilter === 'today' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/25' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                     >
                         <Clock size={14}/> Today
+                    </button>
+                    <button
+                        onClick={() => setTimeFilter('custom')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${timeFilter === 'custom' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/25' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        <Calendar size={14}/> Custom
                     </button>
                 </div>
 
@@ -140,7 +194,7 @@ const UserDashboard = () => {
             />
             <StatsCard 
                 title="Current View" 
-                value={timeFilter === 'today' ? "Today's Stats" : (activePhase === 'All' ? "All Phases" : `Phase 0${activePhase}`)} 
+                value={getCurrentViewText()} 
                 icon={<Layers size={24}/>} 
                 color="orange" 
                 isText={true}
@@ -157,6 +211,7 @@ const UserDashboard = () => {
                     <span className="text-slate-500 text-sm font-normal ml-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
                         {activePhase === 'All' ? 'All Phases' : `Phase 0${activePhase} Only`} 
                         {timeFilter === 'today' && ' (Today)'}
+                        {timeFilter === 'custom' && ` (${startDate || '?'} to ${endDate || '?'})`}
                     </span>
                 </h2>
                 <button onClick={downloadCSV} className="flex items-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded-xl text-sm transition">
@@ -267,7 +322,7 @@ const StatsCard = ({ title, value, icon, color, isText = false }) => {
             <div className="flex justify-between items-start">
                 <div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">{title}</p>
-                    <h3 className={`font-bold text-white mt-2 ${isText ? 'text-xl' : 'text-3xl'}`}>{value}</h3>
+                    <h3 className={`font-bold text-white mt-2 ${isText ? 'text-[16px]' : 'text-3xl'} truncate max-w-[150px]`}>{value}</h3>
                 </div>
                 <div className={`p-3 rounded-xl ${iconColor.replace('text-', 'bg-').split(' ')[1]} ${iconColor.split(' ')[0]}`}>
                     {icon}
