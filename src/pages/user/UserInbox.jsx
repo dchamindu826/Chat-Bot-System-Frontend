@@ -610,10 +610,10 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                           <div className="flex items-center gap-2">
                               <h4 className={`font-bold text-sm truncate ${selectedContact?._id === contact._id ? (isDarkMode ? 'text-white' : 'text-gray-900') : (isDarkMode ? 'text-slate-300' : 'text-gray-700')}`}>{contact.phoneNumber}</h4>
                               {(contact.unreadCount > 0) && (
-                                  <span className={`h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold shadow-sm animate-pulse`}>
-                                      {contact.unreadCount}
-                                  </span>
-                              )}
+                <span className={`h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold shadow-sm animate-pulse`}>
+        1
+                 </span>
+                     )}
                           </div>
                           <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{new Date(contact.lastMessageTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                       </div>

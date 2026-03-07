@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import UserInbox from './UserInbox'; 
 import { Phone, CheckCircle, Clock, Search, MessageSquare, Download, ChevronLeft, ChevronRight, LogOut, RefreshCcw, User, Activity, Layers, Filter } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
@@ -18,83 +18,109 @@ const UserAgentDash = () => {
   const itemsPerPage = 10;
 
   const [pendingSaves, setPendingSaves] = useState(new Set());
+  
+  // Auto Refresh වෙද්දි Edit කරන ඒවා මකාගන්නැති වෙන්න Ref එක
+  const pendingSavesRef = useRef(pendingSaves);
+  useEffect(() => {
+      pendingSavesRef.current = pendingSaves;
+  }, [pendingSaves]);
 
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const userName = localStorage.getItem('name');
 
   // --- 1. FETCH DATA ---
-  const fetchMyContacts = async () => {
+  const fetchMyContacts = async (isInitial = false) => {
     try {
-        setLoading(true);
+        if (isInitial) setLoading(true);
         const res = await fetch(`${API_BASE_URL}/api/crm/contacts`, { 
             headers: { token: `Bearer ${token}` } 
         });
         if (res.ok) {
             const data = await res.json();
             const processedLeads = data.map(c => ({...c, phase: c.phase || 1}));
-            setContacts(processedLeads);
+            
+            setContacts(prev => {
+                if (prev.length === 0) return processedLeads;
+                
+                return processedLeads.map(incoming => {
+                    if (pendingSavesRef.current.has(incoming._id)) {
+                        return prev.find(p => p._id === incoming._id) || incoming;
+                    }
+                    return incoming;
+                });
+            });
         }
     } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
+    finally { if (isInitial) setLoading(false); }
   };
 
   useEffect(() => { 
-      fetchMyContacts(); 
-      // Auto refresh to update unread counts
-      const interval = setInterval(fetchMyContacts, 10000); 
+      fetchMyContacts(true); 
+      const interval = setInterval(() => fetchMyContacts(false), 10000); 
       return () => clearInterval(interval);
   }, []);
 
-  // --- 2. LOGIC: UPDATE STATUS Lcoally ---
+  // --- 2. LOGIC: UPDATE STATUS Locally (Dropdown එකෙන් තෝරන දේවල්) ---
   const handleUpdateRow = (id, field, value) => {
       const currentContact = contacts.find(c => c._id === id);
       let updatedFields = { ...currentContact, [field]: value };
-
-      if (field === 'callStatus' && value === 'No Answer') {
-          const currentPhase = currentContact.phase || 1;
-          
-          if (currentPhase < 3) {
-              const confirmMove = window.confirm(`Call No Answered. Move to PHASE 0${currentPhase + 1}?`);
-              if (confirmMove) {
-                  updatedFields.phase = currentPhase + 1;
-                  updatedFields.callStatus = 'Pending';
-                  updatedFields.attemptCount = (parseInt(currentContact.attemptCount || 0) + 1).toString();
-                  updatedFields.remarks = `${updatedFields.remarks || ''} [P${currentPhase}: No Answer]`.trim();
-                  alert(`Phase updated locally. Click 'Save' to confirm! 🚀`);
-              }
-          } else {
-              alert("Phase 03 Ended. Marked as No Answer.");
-          }
-      }
-
+      
       setContacts(prev => prev.map(c => c._id === id ? { ...c, ...updatedFields } : c));
       setPendingSaves(prev => new Set(prev).add(id));
   };
 
+  // --- 3. SAVE TO DATABASE (Save බට්න් එක එබුවම Phase මාරු වෙනවා) ---
   const handleSaveRow = async (id) => {
-      const contactToSave = contacts.find(c => c._id === id);
+      let contactToSave = contacts.find(c => c._id === id);
       if(!contactToSave) return;
+
+      let updatedPhase = contactToSave.phase || 1;
+      let updatedCallStatus = contactToSave.callStatus;
+      let updatedRemarks = contactToSave.remarks || '';
+      let updatedAttemptCount = contactToSave.attemptCount || '0';
+
+      // 🔥 Save කරන වෙලාවේ Status එක 'No Answer' නම් විතරක් Phase එක Update වෙනවා
+      if (updatedCallStatus === 'No Answer') {
+          if (updatedPhase === 1) {
+              updatedPhase = 2;
+              updatedCallStatus = 'Pending'; // අලුත් Phase එකේ ආයේ Pending වෙනවා
+              updatedAttemptCount = (parseInt(updatedAttemptCount) + 1).toString();
+          } else if (updatedPhase === 2) {
+              updatedPhase = 3;
+              updatedCallStatus = 'Pending'; // අලුත් Phase එකේ ආයේ Pending වෙනවා
+              updatedAttemptCount = (parseInt(updatedAttemptCount) + 1).toString();
+          }
+      }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/crm/contact/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
             body: JSON.stringify({ 
-                callStatus: contactToSave.callStatus,
+                callStatus: updatedCallStatus,
                 attemptMethod: contactToSave.attemptMethod,
-                attemptCount: contactToSave.attemptCount,
-                remarks: contactToSave.remarks,
-                phase: contactToSave.phase
+                attemptCount: updatedAttemptCount,
+                remarks: updatedRemarks,
+                phase: updatedPhase
             })
         });
 
         if(res.ok) {
+            setContacts(prev => prev.map(c => c._id === id ? { 
+                ...c, 
+                phase: updatedPhase,
+                callStatus: updatedCallStatus,
+                remarks: updatedRemarks,
+                attemptCount: updatedAttemptCount
+            } : c));
+
             setPendingSaves(prev => {
                 const next = new Set(prev);
                 next.delete(id);
                 return next;
             });
+            alert("Changes saved successfully!");
         } else {
             alert("Failed to save!");
         }
@@ -146,8 +172,7 @@ const UserAgentDash = () => {
   }).length;
   const pendingInPhase = totalInPhase - completedInPhase;
 
-  // 🔥 NEW: Calculate overall unread count for Agent
-  const totalUnread = contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  const totalUnreadContacts = contacts.filter(c => (c.unreadCount || 0) > 0).length;
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -188,10 +213,9 @@ const UserAgentDash = () => {
                     </button>
                     <button onClick={() => setViewMode('inbox')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all relative ${viewMode === 'inbox' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                         <MessageSquare size={16}/> Inbox
-                        {/* 🔥 NEW: Unread Count Badge */}
-                        {totalUnread > 0 && (
+                        {totalUnreadContacts > 0 && (
                             <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full animate-pulse shadow-lg border-2 border-[#0B1120]">
-                                {totalUnread}
+                                {totalUnreadContacts}
                             </span>
                         )}
                     </button>
@@ -240,7 +264,7 @@ const UserAgentDash = () => {
                             <input type="text" placeholder="Search number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#0B1120] border-none rounded-lg py-2.5 pl-10 text-white text-sm focus:ring-1 focus:ring-indigo-500"/>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={fetchMyContacts} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 transition"><RefreshCcw size={18}/></button>
+                            <button onClick={() => fetchMyContacts(true)} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-lg text-slate-300 transition"><RefreshCcw size={18}/></button>
                             <button onClick={exportToCSV} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><Download size={16}/> CSV</button>
                         </div>
                     </div>
@@ -271,7 +295,7 @@ const UserAgentDash = () => {
                                         <td className="p-4 text-left">
                                             <div className="flex items-center gap-2">
                                                 <div className="font-bold text-white text-base">{contact.phoneNumber}</div>
-                                                {contact.unreadCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse">{contact.unreadCount}</span>}
+                                                {contact.unreadCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">1</span>}
                                             </div>
                                             <div className="text-xs text-slate-500">{contact.name || "Guest"}</div>
                                         </td>
