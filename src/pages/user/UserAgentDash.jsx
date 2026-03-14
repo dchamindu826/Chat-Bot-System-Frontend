@@ -19,7 +19,6 @@ const UserAgentDash = () => {
 
   const [pendingSaves, setPendingSaves] = useState(new Set());
   
-  // Auto Refresh වෙද්දි Edit කරන ඒවා මකාගන්නැති වෙන්න Ref එක
   const pendingSavesRef = useRef(pendingSaves);
   useEffect(() => {
       pendingSavesRef.current = pendingSaves;
@@ -28,8 +27,21 @@ const UserAgentDash = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const userName = localStorage.getItem('name');
+  const userRole = (localStorage.getItem('role') || '').toLowerCase();
 
-  // --- 1. FETCH DATA ---
+  // 🔥 FIX: Extract ID correctly from Token bypassing 'undefined' localstorage bugs
+  const getUserId = () => {
+      if (token) {
+          try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              if (payload && (payload.id || payload._id)) return String(payload.id || payload._id);
+          } catch (e) { console.error("Token decoding failed"); }
+      }
+      let id = localStorage.getItem('id') || localStorage.getItem('userId') || localStorage.getItem('_id');
+      return (id && id !== 'undefined' && id !== 'null') ? String(id) : null;
+  };
+  const userId = getUserId();
+
   const fetchMyContacts = async (isInitial = false) => {
     try {
         if (isInitial) setLoading(true);
@@ -61,7 +73,6 @@ const UserAgentDash = () => {
       return () => clearInterval(interval);
   }, []);
 
-  // --- 2. LOGIC: UPDATE STATUS Locally (Dropdown එකෙන් තෝරන දේවල්) ---
   const handleUpdateRow = (id, field, value) => {
       const currentContact = contacts.find(c => c._id === id);
       let updatedFields = { ...currentContact, [field]: value };
@@ -70,7 +81,6 @@ const UserAgentDash = () => {
       setPendingSaves(prev => new Set(prev).add(id));
   };
 
-  // --- 3. SAVE TO DATABASE (Save බට්න් එක එබුවම Phase මාරු වෙනවා) ---
   const handleSaveRow = async (id) => {
       let contactToSave = contacts.find(c => c._id === id);
       if(!contactToSave) return;
@@ -80,15 +90,14 @@ const UserAgentDash = () => {
       let updatedRemarks = contactToSave.remarks || '';
       let updatedAttemptCount = contactToSave.attemptCount || '0';
 
-      // 🔥 Save කරන වෙලාවේ Status එක 'No Answer' නම් විතරක් Phase එක Update වෙනවා
       if (updatedCallStatus === 'No Answer') {
           if (updatedPhase === 1) {
               updatedPhase = 2;
-              updatedCallStatus = 'Pending'; // අලුත් Phase එකේ ආයේ Pending වෙනවා
+              updatedCallStatus = 'Pending';
               updatedAttemptCount = (parseInt(updatedAttemptCount) + 1).toString();
           } else if (updatedPhase === 2) {
               updatedPhase = 3;
-              updatedCallStatus = 'Pending'; // අලුත් Phase එකේ ආයේ Pending වෙනවා
+              updatedCallStatus = 'Pending';
               updatedAttemptCount = (parseInt(updatedAttemptCount) + 1).toString();
           }
       }
@@ -135,9 +144,26 @@ const UserAgentDash = () => {
       setViewMode('inbox');
   };
 
+  // 🔥 FILTER LOGIC FIX (Strict ID Matching for Agent Dashboard)
+  const myCampaignContacts = userRole === 'agent' 
+    ? contacts.filter(c => {
+        const rawAssigned = c.assignedTo || c.assigned_to;
+        const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
+        return assignedId && String(assignedId).trim() === String(userId).trim(); 
+    }) 
+    : contacts;
+
+  const phaseContacts = activePhase === 'All' ? myCampaignContacts : myCampaignContacts.filter(c => c.phase === activePhase);
+
+  const filteredContacts = phaseContacts.filter(c => {
+      const pNum = c.phoneNumber || c.phone_number || "";
+      const cName = c.name || "";
+      return pNum.includes(searchTerm) || cName.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
   const exportToCSV = () => {
       const headers = ["Phone", "Name", "Phase", "Method", "Attempts", "Status", "Remarks"];
-      const exportData = activePhase === 'All' ? contacts : contacts.filter(c => c.phase === activePhase);
+      const exportData = activePhase === 'All' ? filteredContacts : filteredContacts.filter(c => c.phase === activePhase);
       
       const rows = exportData.map(c => [
           c.phoneNumber, c.name, `Phase ${c.phase}`, c.attemptMethod, c.attemptCount, c.callStatus, c.remarks
@@ -156,14 +182,6 @@ const UserAgentDash = () => {
       navigate('/login');
   };
 
-  const phaseContacts = activePhase === 'All' ? contacts : contacts.filter(c => c.phase === activePhase);
-
-  const filteredContacts = phaseContacts.filter(c => {
-      const pNum = c.phoneNumber || c.phone_number || "";
-      const cName = c.name || "";
-      return pNum.includes(searchTerm) || cName.toLowerCase().includes(searchTerm.toLowerCase());
-  });
-
   const totalInPhase = phaseContacts.length;
   const completedInPhase = phaseContacts.filter(c => {
       const status = c.callStatus;
@@ -172,7 +190,7 @@ const UserAgentDash = () => {
   }).length;
   const pendingInPhase = totalInPhase - completedInPhase;
 
-  const totalUnreadContacts = contacts.filter(c => (c.unreadCount || 0) > 0).length;
+  const totalUnreadContacts = myCampaignContacts.filter(c => (c.unreadCount || 0) > 0).length;
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -189,12 +207,12 @@ const UserAgentDash = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-hidden">
+    <div className="min-h-screen bg-[#0B1120] text-slate-200 font-sans selection:bg-indigo-500/30 relative overflow-hidden flex flex-col">
         <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"/>
         
         {/* --- HEADER --- */}
-        <div className="h-18 border-b border-white/5 bg-[#0B1120]/90 backdrop-blur-xl flex items-center justify-between px-8 sticky top-0 z-50">
-            <div className="flex items-center gap-4">
+        <div className="h-18 border-b border-white/5 bg-[#0B1120]/90 backdrop-blur-xl flex items-center justify-between px-8 sticky top-0 z-50 shrink-0">
+            <div className="flex items-center gap-4 py-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
                     <Activity className="text-white" size={20}/>
                 </div>
@@ -227,21 +245,19 @@ const UserAgentDash = () => {
         </div>
 
         {/* --- BODY --- */}
-        <div className="p-6 max-w-[1800px] mx-auto z-10 relative">
+        <div className="flex-1 p-6 max-w-[1800px] w-full mx-auto z-10 relative">
             {viewMode === 'campaign' ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* PHASE TABS */}
                     <div className="flex items-center gap-4 border-b border-white/10 pb-1">
                         <button onClick={() => { setActivePhase('All'); setCurrentPage(1); }} className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activePhase === 'All' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}><Filter size={16}/> OVERALL</button>
                         {[1, 2, 3].map(phase => (
                             <button key={phase} onClick={() => { setActivePhase(phase); setCurrentPage(1); }} className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activePhase === phase ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
                                 <Layers size={16}/> PHASE 0{phase}
-                                <span className="bg-white/10 text-white px-1.5 py-0.5 rounded text-[10px]">{contacts.filter(c => c.phase === phase).length}</span>
+                                <span className="bg-white/10 text-white px-1.5 py-0.5 rounded text-[10px]">{myCampaignContacts.filter(c => c.phase === phase).length}</span>
                             </button>
                         ))}
                     </div>
 
-                    {/* OVERVIEW CARDS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-[#1e293b]/40 border border-white/5 p-6 rounded-2xl flex items-center justify-between">
                             <div><p className="text-slate-400 text-xs font-bold uppercase mb-2">{activePhase === 'All' ? 'Total Assigned (All Phases)' : `Assigned (Phase 0${activePhase})`}</p><h3 className="text-5xl font-bold text-white tracking-tight">{totalInPhase}</h3></div>
@@ -257,7 +273,6 @@ const UserAgentDash = () => {
                         </div>
                     </div>
 
-                    {/* TABLE CONTROLS */}
                     <div className="flex justify-between items-center gap-4 bg-[#1e293b]/30 p-2 rounded-xl border border-white/5">
                         <div className="relative w-96">
                             <Search className="absolute left-3 top-3 text-slate-500" size={16}/>
@@ -269,7 +284,6 @@ const UserAgentDash = () => {
                         </div>
                     </div>
 
-                    {/* DATA TABLE */}
                     <div className="bg-[#1e293b]/30 border border-white/5 rounded-xl overflow-hidden shadow-xl">
                         <table className="w-full text-sm">
                             <thead className="bg-[#0f172a] text-slate-400 uppercase text-xs font-bold">
