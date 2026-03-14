@@ -166,7 +166,7 @@ const UserAgentDash = () => {
       const exportData = activePhase === 'All' ? filteredContacts : filteredContacts.filter(c => c.phase === activePhase);
       
       const rows = exportData.map(c => [
-          c.phoneNumber, c.name, `Phase ${c.phase}`, c.attemptMethod, c.attemptCount, c.callStatus, c.remarks
+          c.phoneNumber || c.phone_number, c.name, `Phase ${c.phase}`, c.attemptMethod || c.attempt_method, c.attemptCount || c.attempt_count, c.callStatus || c.call_status, c.remarks
       ]);
       
       let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
@@ -184,13 +184,13 @@ const UserAgentDash = () => {
 
   const totalInPhase = phaseContacts.length;
   const completedInPhase = phaseContacts.filter(c => {
-      const status = c.callStatus;
-      const attempts = parseInt(c.attemptCount || 0);
+      const status = c.callStatus || c.call_status;
+      const attempts = parseInt(c.attemptCount || c.attempt_count || 0);
       return ['Answered', 'Reject', 'No Answer'].includes(status) || attempts > 0;
   }).length;
   const pendingInPhase = totalInPhase - completedInPhase;
 
-  const totalUnreadContacts = myCampaignContacts.filter(c => (c.unreadCount || 0) > 0).length;
+  const totalUnreadContacts = myCampaignContacts.filter(c => (c.unreadCount || c.unread_count || 0) > 0).length;
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -198,10 +198,11 @@ const UserAgentDash = () => {
   const totalPages = Math.ceil(filteredContacts.length / itemsPerPage);
 
   const getStatusColor = (status) => {
-    switch(status) {
-        case 'Answered': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-        case 'Reject': return 'bg-red-500/20 text-red-400 border-red-500/30';
-        case 'No Answer': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+    if (!status) return 'bg-slate-700/50 text-slate-300 border-slate-600/50';
+    switch(status.toLowerCase()) {
+        case 'answered': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+        case 'reject': return 'bg-red-500/20 text-red-400 border-red-500/30';
+        case 'no answer': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
         default: return 'bg-slate-700/50 text-slate-300 border-slate-600/50';
     }
   };
@@ -303,13 +304,13 @@ const UserAgentDash = () => {
                                 {currentItems.length === 0 ? (
                                     <tr><td colSpan="9" className="p-10 text-center text-slate-500">No leads found.</td></tr>
                                 ) : currentItems.map((contact, index) => (
-                                    <tr key={contact._id} className="hover:bg-white/[0.02] transition-colors">
+                                    <tr key={contact._id || contact.id} className="hover:bg-white/[0.02] transition-colors">
                                         <td className="p-4 text-slate-500 text-left">{(currentPage - 1) * itemsPerPage + index + 1}</td>
                                         
                                         <td className="p-4 text-left">
                                             <div className="flex items-center gap-2">
-                                                <div className="font-bold text-white text-base">{contact.phoneNumber}</div>
-                                                {contact.unreadCount > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">1</span>}
+                                                <div className="font-bold text-white text-base">{contact.phoneNumber || contact.phone_number}</div>
+                                                {(contact.unreadCount > 0 || contact.unread_count > 0) && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">1</span>}
                                             </div>
                                             <div className="text-xs text-slate-500">{contact.name || "Guest"}</div>
                                         </td>
@@ -317,12 +318,12 @@ const UserAgentDash = () => {
                                         {activePhase === 'All' && <td className="p-4 text-center"><span className="bg-white/10 text-slate-300 px-2 py-1 rounded text-xs font-bold">P{contact.phase || 1}</span></td>}
                                         
                                         <td className="p-4 text-center">
-                                            <select value={contact.attemptMethod || ''} onChange={(e) => handleUpdateRow(contact._id, 'attemptMethod', e.target.value)} className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-24 text-center cursor-pointer">
+                                            <select value={contact.attemptMethod || contact.attempt_method || ''} onChange={(e) => handleUpdateRow(contact._id || contact.id, 'attemptMethod', e.target.value)} className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-24 text-center cursor-pointer">
                                                 <option value="">-</option><option value="3CX">3CX</option><option value="Direct">Direct</option><option value="WhatsApp">WhatsApp</option>
                                             </select>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <select value={contact.attemptCount || '0'} onChange={(e) => handleUpdateRow(contact._id, 'attemptCount', e.target.value)} className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-16 text-center cursor-pointer">
+                                            <select value={contact.attemptCount || contact.attempt_count || '0'} onChange={(e) => handleUpdateRow(contact._id || contact.id, 'attemptCount', e.target.value)} className="bg-[#0B1120] border border-white/10 text-slate-300 rounded-lg px-2 py-1.5 text-xs focus:border-indigo-500 outline-none w-16 text-center cursor-pointer">
                                                 {[0,1,2,3,4,5].map(num => <option key={num} value={num}>{num}</option>)}<option value="5+">5+</option>
                                             </select>
                                         </td>
@@ -332,16 +333,16 @@ const UserAgentDash = () => {
                                             </button>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <select value={contact.callStatus || 'Pending'} onChange={(e) => handleUpdateRow(contact._id, 'callStatus', e.target.value)} className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer border border-transparent w-32 text-center transition-all ${getStatusColor(contact.callStatus)}`}>
+                                            <select value={contact.callStatus || contact.call_status || 'Pending'} onChange={(e) => handleUpdateRow(contact._id || contact.id, 'callStatus', e.target.value)} className={`rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer border border-transparent w-32 text-center transition-all ${getStatusColor(contact.callStatus || contact.call_status)}`}>
                                                 <option value="Pending">Pending</option><option value="Answered">Answered</option><option value="No Answer">No Answer</option><option value="Reject">Reject</option>
                                             </select>
                                         </td>
                                         <td className="p-4 text-left">
-                                            <input type="text" placeholder="Write a remark..." value={contact.remarks || ''} onChange={(e) => handleUpdateRow(contact._id, 'remarks', e.target.value)} className="bg-transparent border-b border-white/10 w-full outline-none text-slate-300 text-sm py-1 focus:border-indigo-500 transition-colors placeholder-slate-700"/>
+                                            <input type="text" placeholder="Write a remark..." value={contact.remarks || ''} onChange={(e) => handleUpdateRow(contact._id || contact.id, 'remarks', e.target.value)} className="bg-transparent border-b border-white/10 w-full outline-none text-slate-300 text-sm py-1 focus:border-indigo-500 transition-colors placeholder-slate-700"/>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <button onClick={() => handleSaveRow(contact._id)} disabled={!pendingSaves.has(contact._id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-md ${pendingSaves.has(contact._id) ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse' : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'}`}>
-                                                {pendingSaves.has(contact._id) ? 'Save' : 'Saved'}
+                                            <button onClick={() => handleSaveRow(contact._id || contact.id)} disabled={!pendingSaves.has(contact._id || contact.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-md ${pendingSaves.has(contact._id || contact.id) ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse' : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'}`}>
+                                                {pendingSaves.has(contact._id || contact.id) ? 'Save' : 'Saved'}
                                             </button>
                                         </td>
                                     </tr>

@@ -84,7 +84,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const userRole = (localStorage.getItem('role') || '').toLowerCase(); 
   const userName = localStorage.getItem('name') || 'Agent'; 
   
-  // 🔥 FIX: Extract ID correctly from Token bypassing 'undefined' localstorage bugs
   const getUserId = () => {
       if (token) {
           try {
@@ -350,21 +349,42 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           });
 
           if(res.ok) {
-              const newContact = await res.json();
+              const rawContact = await res.json();
+              
+              const newContact = {
+                  ...rawContact,
+                  _id: rawContact.id || rawContact._id,
+                  phoneNumber: rawContact.phone_number || rawContact.phoneNumber,
+                  assignedTo: rawContact.assigned_to || rawContact.assignedTo,
+                  lastMessage: rawContact.last_message || rawContact.lastMessage,
+                  lastMessageTime: rawContact.last_message_time || rawContact.lastMessageTime
+              };
+
+              const assignedId = typeof newContact.assignedTo === 'object' ? (newContact.assignedTo?._id || newContact.assignedTo?.id) : newContact.assignedTo;
+
+              if (userRole === 'agent' && assignedId && String(assignedId).trim() !== String(userId).trim()) {
+                  alert("This number already exists in the system and is assigned to another agent.");
+                  return;
+              }
+
               setContacts(prev => {
                   const exists = prev.find(c => c.phoneNumber === newContact.phoneNumber);
                   if(exists) {
-                      alert("This number already exists in the system.");
+                      alert("This number already exists in your list.");
                       return prev;
                   }
                   return [newContact, ...prev];
               });
+
               setSelectedContact(newContact);
               setShowAddChatModal(false);
               setNewChatPhone("");
               setNewChatName("");
+          } else {
+              const err = await res.json();
+              alert(err.message || "Failed to add contact.");
           }
-      } catch(err) { console.error(err); }
+      } catch(err) { console.error(err); alert("Network Error"); }
   };
 
   const handleCsvUpload = async () => {
@@ -405,14 +425,32 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               if (res.ok) {
                   const addedContacts = await res.json();
                   if (Array.isArray(addedContacts) && addedContacts.length > 0) {
-                      setContacts(prev => [...addedContacts, ...prev]);
+                      
+                      const normalized = addedContacts.map(c => ({
+                          ...c,
+                          _id: c.id || c._id,
+                          phoneNumber: c.phone_number || c.phoneNumber,
+                          assignedTo: c.assigned_to || c.assignedTo,
+                          lastMessage: c.last_message || c.lastMessage,
+                          lastMessageTime: c.last_message_time || c.lastMessageTime
+                      }));
+
+                      setContacts(prev => {
+                          const existingPhones = new Set(prev.map(p => p.phoneNumber));
+                          const trulyNew = normalized.filter(n => !existingPhones.has(n.phoneNumber));
+                          return [...trulyNew, ...prev];
+                      });
                       alert(`Successfully imported ${addedContacts.length} new contacts!`);
                   }
                   setShowAddChatModal(false);
                   setCsvFile(null);
+              } else {
+                  const err = await res.json();
+                  alert(err.message || "Failed to import contacts.");
               }
           } catch (err) {
               console.error(err);
+              alert("Network Error");
           } finally {
               setIsImporting(false);
           }
@@ -528,12 +566,12 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     let leadsToAssign = selectedIds;
 
     if (isQuantityBased) {
-        let sortedUnassigned = [...filteredContacts].filter(c => !c.assignedTo);
-        if (assignDirection === 'newest') {sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0));
-   } else {sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime || 0) - new Date(b.lastMessageTime || 0));
+        let sortedUnassigned = [...filteredContacts].filter(c => !c.assignedTo && !c.assigned_to);
+        if (assignDirection === 'newest') {sortedUnassigned.sort((a, b) => new Date(b.lastMessageTime || b.last_message_time || 0) - new Date(a.lastMessageTime || a.last_message_time || 0));
+   } else {sortedUnassigned.sort((a, b) => new Date(a.lastMessageTime || a.last_message_time || 0) - new Date(b.lastMessageTime || b.last_message_time || 0));
      } 
 
-        const unassignedLeads = sortedUnassigned.slice(0, assignAmount).map(c => c._id);
+        const unassignedLeads = sortedUnassigned.slice(0, assignAmount).map(c => c._id || c.id);
         if (unassignedLeads.length === 0) return alert("No unassigned leads available in this section!");
         leadsToAssign = unassignedLeads;
     } else {
@@ -549,22 +587,22 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
             body: JSON.stringify({ contactIds: leadsToAssign, agentId })
         });
         if(res.ok) {
-            setContacts(prev => prev.map(c => leadsToAssign.includes(c._id) ? { ...c, assignedTo: agents.find(a => a._id === agentId) } : c));
+            setContacts(prev => prev.map(c => leadsToAssign.includes(c._id || c.id) ? { ...c, assignedTo: agents.find(a => a._id === agentId) } : c));
             setSelectedIds([]); setShowAssignModal(false); alert(`Successfully assigned ${leadsToAssign.length} leads!`);
         }
     } catch(err) { alert("Error assigning leads"); }
   };
 
-  const filteredContacts = useMemo(() => {
+   const filteredContacts = useMemo(() => {
     return contacts
       .filter(c => {
         const contactPhone = c.phoneNumber || c.phone_number || "";
         const matchesSearch = contactPhone.includes(searchTerm);
         
         let matchesTab = true;
-        const isImported = c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV';
+        const msgText = c.lastMessage || c.last_message || "";
+        const isImported = msgText === 'Created Manually' || msgText === 'Imported via CSV';
         
-        // 🔥 FIX: Correctly extract Assigned ID for matching
         const rawAssigned = c.assignedTo || c.assigned_to;
         const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
 
@@ -610,12 +648,12 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
         return matchesTab && matchesAgent && matchesStatus && matchesPhase && matchesSearch;
       })
       .sort((a, b) => {
-          const aUnread = a.unreadCount > 0 ? 1 : 0;
-          const bUnread = b.unreadCount > 0 ? 1 : 0;
+          const aUnread = (a.unreadCount || a.unread_count) > 0 ? 1 : 0;
+          const bUnread = (b.unreadCount || b.unread_count) > 0 ? 1 : 0;
           if (aUnread !== bUnread) {
               return bUnread - aUnread; 
           }
-          return new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0);
+          return new Date(b.lastMessageTime || b.last_message_time || 0) - new Date(a.lastMessageTime || a.last_message_time || 0);
       });
   }, [contacts, searchTerm, activeTab, selectedAgentFilter, selectedStatusFilter, selectedPhaseFilter, userRole, userId]);
 
@@ -684,26 +722,29 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           const assignedAgentObj = typeof rawAssigned === 'object' ? rawAssigned : agents.find(a => a._id === rawAssigned);
           const displayAgentName = assignedAgentObj ? assignedAgentObj.name : 'Agent';
           const cStatus = contact.callStatus || contact.call_status || 'Pending';
+          const unread = contact.unreadCount || contact.unread_count || 0;
+          const phone = contact.phoneNumber || contact.phone_number || "";
+          const cId = contact._id || contact.id;
 
           return (
-              <div key={contact._id} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === contact._id ? `bg-white/10 border-white/20 shadow-inner` : `bg-transparent border-transparent ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}`}>
+              <div key={cId} onClick={() => setSelectedContact(contact)} className={`p-3 rounded-xl cursor-pointer flex gap-3 transition-all duration-300 border group relative ${selectedContact?._id === cId ? 'bg-white/10 border-white/20 shadow-inner' : 'bg-transparent border-transparent ' + (isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50')}`}>
                   {userRole !== 'agent' && (
-                      <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(contact._id) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(contact._id) ? setSelectedIds(selectedIds.filter(id => id !== contact._id)) : setSelectedIds([...selectedIds, contact._id]) }}>{selectedIds.includes(contact._id) ? <CheckSquare className={`text-white bg-[#0f172a] rounded`} size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
+                      <div className={`absolute left-2 top-2 z-10 ${selectedIds.includes(cId) ? 'block' : 'hidden group-hover:block'}`}><button onClick={(e) => { e.stopPropagation(); selectedIds.includes(cId) ? setSelectedIds(selectedIds.filter(id => id !== cId)) : setSelectedIds([...selectedIds, cId]) }}>{selectedIds.includes(cId) ? <CheckSquare className={`text-white bg-[#0f172a] rounded`} size={18}/> : <Square className="text-slate-500 bg-[#0f172a] rounded" size={18}/>}</button></div>
                   )}
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${rawAssigned ? 'bg-indigo-500' : 'bg-slate-700'}`}>{contact.phoneNumber?.slice(-2) || "N"}</div>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-lg ${rawAssigned ? 'bg-indigo-500' : 'bg-slate-700'}`}>{phone.slice(-2) || "N"}</div>
                   <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
                           <div className="flex items-center gap-2">
-                              <h4 className={`font-bold text-sm truncate ${selectedContact?._id === contact._id ? (isDarkMode ? 'text-white' : 'text-gray-900') : (isDarkMode ? 'text-slate-300' : 'text-gray-700')}`}>{contact.phoneNumber}</h4>
-                              {(contact.unreadCount > 0) && (
+                              <h4 className={`font-bold text-sm truncate ${selectedContact?._id === cId ? (isDarkMode ? 'text-white' : 'text-gray-900') : (isDarkMode ? 'text-slate-300' : 'text-gray-700')}`}>{phone}</h4>
+                              {unread > 0 && (
                                   <span className={`h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold shadow-sm animate-pulse`}>
-                                      1
+                                      {unread}
                                   </span>
                               )}
                           </div>
-                          <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{new Date(contact.lastMessageTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                          <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{contact.lastMessageTime || contact.last_message_time ? new Date(contact.lastMessageTime || contact.last_message_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</span>
                       </div>
-                      <p className={`text-xs truncate mb-1 ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>{contact.lastMessage || "New Lead"}</p>
+                      <p className={`text-xs truncate mb-1 ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>{contact.lastMessage || contact.last_message || "New Lead"}</p>
                       
                       <div className="flex items-center justify-between">
                           {rawAssigned ? (
@@ -724,6 +765,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   }, [filteredContacts, selectedContact?._id, selectedIds, isDarkMode, agents, userRole]);
 
   const formatMessageDate = (dateString) => {
+      if (!dateString) return '';
       const date = new Date(dateString);
       const today = new Date();
       const yesterday = new Date(today);
@@ -871,30 +913,31 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                             const uId = userId;
                             
                             if (tab === 'New Chat') {
-                                badgeCount = contacts.filter(c => !c.assignedTo && c.lastMessage !== 'Created Manually' && c.lastMessage !== 'Imported via CSV' && c.unreadCount > 0).length;
+                                badgeCount = contacts.filter(c => !c.assignedTo && !c.assigned_to && c.lastMessage !== 'Created Manually' && c.lastMessage !== 'Imported via CSV' && c.last_message !== 'Created Manually' && c.last_message !== 'Imported via CSV' && (c.unreadCount > 0 || c.unread_count > 0)).length;
                             } else if (tab === 'Imported') {
                                 if (userRole === 'agent') {
                                     badgeCount = contacts.filter(c => {
                                         const rawAssigned = c.assignedTo || c.assigned_to;
                                         const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
-                                        const isImport = c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV';
-                                        return assignedId && String(assignedId).trim() === String(uId).trim() && isImport && c.unreadCount > 0;
+                                        const msgText = c.lastMessage || c.last_message || "";
+                                        const isImport = msgText === 'Created Manually' || msgText === 'Imported via CSV';
+                                        return assignedId && String(assignedId).trim() === String(uId).trim() && isImport && (c.unreadCount > 0 || c.unread_count > 0);
                                     }).length;
                                 } else {
-                                    badgeCount = contacts.filter(c => !c.assignedTo && (c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV') && c.unreadCount > 0).length;
+                                    badgeCount = contacts.filter(c => !c.assignedTo && !c.assigned_to && (c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV' || c.last_message === 'Created Manually' || c.last_message === 'Imported via CSV') && (c.unreadCount > 0 || c.unread_count > 0)).length;
                                 }
                             } else if (tab === 'Assigned') {
                                 if (userRole === 'agent') {
                                     badgeCount = contacts.filter(c => {
                                         const rawAssigned = c.assignedTo || c.assigned_to;
                                         const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
-                                        return assignedId && String(assignedId).trim() === String(uId).trim() && c.unreadCount > 0;
+                                        return assignedId && String(assignedId).trim() === String(uId).trim() && (c.unreadCount > 0 || c.unread_count > 0);
                                     }).length;
                                 } else {
-                                    badgeCount = contacts.filter(c => c.assignedTo && c.unreadCount > 0).length;
+                                    badgeCount = contacts.filter(c => (c.assignedTo || c.assigned_to) && (c.unreadCount > 0 || c.unread_count > 0)).length;
                                 }
                             } else if (tab === 'All') {
-                                badgeCount = contacts.filter(c => c.unreadCount > 0).length;
+                                badgeCount = contacts.filter(c => c.unreadCount > 0 || c.unread_count > 0).length;
                             }
                             
                             return (
@@ -938,7 +981,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                     <option value="1">Phase 1</option>
                                     <option value="2">Phase 2</option>
                                     <option value="3">Phase 3</option>
-                                    
+                                    <option value="4">Phase 4</option>
                                 </select>
                             </div>
                         </div>
@@ -950,7 +993,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                         <button 
                             onClick={() => {
                                 if (selectedIds.length === filteredContacts.length && filteredContacts.length > 0) setSelectedIds([]);
-                                else setSelectedIds(filteredContacts.map(c => c._id));
+                                else setSelectedIds(filteredContacts.map(c => c._id || c.id));
                             }} 
                             className={`p-2.5 rounded-xl border transition-all ${selectedIds.length === filteredContacts.length && filteredContacts.length > 0 ? `bg-indigo-500 text-white border-transparent` : (isDarkMode ? 'bg-[#1e293b] border-white/5 text-slate-400' : 'bg-gray-100 border-gray-200 text-gray-500')}`}
                             title="Select All Filtered"
@@ -993,14 +1036,14 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                     <div className="flex-1 flex flex-col relative z-10 h-full">
                         <div className={`h-16 shrink-0 flex items-center justify-between px-6 border-b z-20 shadow-sm backdrop-blur-md ${isDarkMode ? 'bg-[#0f172a]/90 border-white/5' : 'bg-white/90 border-gray-200'}`}>
                             <div className="flex items-center gap-3">
-                                <div className={`w-9 h-9 rounded-lg bg-indigo-500 flex items-center justify-center font-bold text-white shadow-lg`}>{selectedContact.phoneNumber?.slice(-2) || "N"}</div>
+                                <div className={`w-9 h-9 rounded-lg bg-indigo-500 flex items-center justify-center font-bold text-white shadow-lg`}>{(selectedContact.phoneNumber || selectedContact.phone_number)?.slice(-2) || "N"}</div>
                                 <div>
-                                    <h3 className={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{selectedContact.phoneNumber}</h3>
+                                    <h3 className={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{selectedContact.phoneNumber || selectedContact.phone_number}</h3>
                                     <div className="flex items-center gap-2 text-xs">
-                                        <span className={`w-1.5 h-1.5 rounded-full ${selectedContact.assignedTo ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${selectedContact.assignedTo || selectedContact.assigned_to ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
                                         <span className="text-slate-400">
-                                            {selectedContact.assignedTo ? 
-                                                `Assigned: ${typeof selectedContact.assignedTo === 'object' ? selectedContact.assignedTo.name : (agents.find(a => a._id === selectedContact.assignedTo)?.name || 'Agent')}` 
+                                            {selectedContact.assignedTo || selectedContact.assigned_to ? 
+                                                `Assigned: ${typeof (selectedContact.assignedTo || selectedContact.assigned_to) === 'object' ? (selectedContact.assignedTo || selectedContact.assigned_to).name : (agents.find(a => a._id === (selectedContact.assignedTo || selectedContact.assigned_to))?.name || 'Agent')}` 
                                             : 'Waiting for assignment'}
                                         </span>
                                     </div>
@@ -1200,13 +1243,13 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                 <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1e293b]/50 border-white/5' : 'bg-gray-50 border-gray-200'}`}>
                                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Assigned Agent</span>
                                     <div className="flex items-center gap-3">
-                                        {selectedContact.assignedTo ? (
+                                        {selectedContact.assignedTo || selectedContact.assigned_to ? (
                                             <>
                                                 <div className={`w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs shadow-md`}>
-                                                    {(typeof selectedContact.assignedTo === 'object' ? selectedContact.assignedTo.name : (agents.find(a => a._id === selectedContact.assignedTo)?.name || 'A')).charAt(0).toUpperCase()}
+                                                    {(typeof (selectedContact.assignedTo || selectedContact.assigned_to) === 'object' ? (selectedContact.assignedTo || selectedContact.assigned_to).name : (agents.find(a => a._id === (selectedContact.assignedTo || selectedContact.assigned_to))?.name || 'A')).charAt(0).toUpperCase()}
                                                 </div>
                                                 <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                                    {typeof selectedContact.assignedTo === 'object' ? selectedContact.assignedTo.name : (agents.find(a => a._id === selectedContact.assignedTo)?.name || 'Agent')}
+                                                    {typeof (selectedContact.assignedTo || selectedContact.assigned_to) === 'object' ? (selectedContact.assignedTo || selectedContact.assigned_to).name : (agents.find(a => a._id === (selectedContact.assignedTo || selectedContact.assigned_to))?.name || 'Agent')}
                                                 </span>
                                             </>
                                         ) : (
@@ -1242,7 +1285,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                                 
                                 <div className="text-center pt-2">
                                     <span className="text-[10px] text-slate-500">
-                                        Last interaction: {new Date(selectedContact.lastMessageTime).toLocaleString()}
+                                        Last interaction: {new Date(selectedContact.lastMessageTime || selectedContact.last_message_time).toLocaleString()}
                                     </span>
                                 </div>
                             </div>
@@ -1257,6 +1300,99 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                 </div>
             )}
         </div>
+
+        {/* ADD NEW CHAT MODAL - NOW VISIBLE TO EVERYONE */}
+        {showAddChatModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className={`border rounded-3xl w-full max-w-sm shadow-2xl p-6 ${isDarkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'}`}>
+                    <div className="flex justify-between items-center mb-5">
+                        <h3 className={`text-lg font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><MessageSquarePlus className="text-emerald-500" size={20}/> Add New Lead</h3>
+                        <button onClick={() => setShowAddChatModal(false)} className="text-slate-400 hover:text-red-500"><X size={18}/></button>
+                    </div>
+
+                    <div className="flex border-b border-gray-200 dark:border-white/10 mb-5">
+                        <button onClick={() => setAddChatMethod('manual')} className={`flex-1 pb-2 text-sm font-bold transition-colors ${addChatMethod === 'manual' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-slate-400 hover:text-slate-300'}`}>Manual Entry</button>
+                        <button onClick={() => setAddChatMethod('csv')} className={`flex-1 pb-2 text-sm font-bold transition-colors ${addChatMethod === 'csv' ? 'text-emerald-500 border-b-2 border-emerald-500' : 'text-slate-400 hover:text-slate-300'}`}>CSV Upload</button>
+                    </div>
+                    
+                    {addChatMethod === 'manual' ? (
+                        <div className="space-y-4 animate-in slide-in-from-left-2 fade-in">
+                            <div>
+                                <label className="text-xs text-slate-400 mb-1 block">Phone Number (with country code, no +)</label>
+                                <input type="text" placeholder="e.g. 0771234567 or 9477..." value={newChatPhone} onChange={(e) => setNewChatPhone(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 mb-1 block">Name (Optional)</label>
+                                <input type="text" placeholder="e.g. Nimal" value={newChatName} onChange={(e) => setNewChatName(e.target.value)} className={`w-full p-3 rounded-xl border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-black/20 border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`} />
+                            </div>
+                            <button onClick={handleAddNewChat} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition mt-2">Add Contact</button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 animate-in slide-in-from-right-2 fade-in">
+                            <p className="text-xs text-slate-400 mb-2">Upload a CSV file containing your contacts. <br/>Format should be: <b>Phone, Name</b></p>
+                            <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${isDarkMode ? 'border-white/20 hover:border-emerald-500/50 bg-white/5' : 'border-gray-300 hover:border-emerald-500/50 bg-gray-50'}`}>
+                                <input type="file" accept=".csv" id="csvUpload" className="hidden" onChange={(e) => setCsvFile(e.target.files[0])} />
+                                <label htmlFor="csvUpload" className="cursor-pointer flex flex-col items-center">
+                                    <FileSpreadsheet size={32} className={`mb-3 ${csvFile ? 'text-emerald-500' : 'text-slate-400'}`} />
+                                    <span className="text-sm font-bold text-slate-300">{csvFile ? csvFile.name : 'Click to select CSV file'}</span>
+                                </label>
+                            </div>
+                            <button onClick={handleCsvUpload} disabled={!csvFile || isImporting} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition disabled:opacity-50 flex justify-center mt-2">
+                                {isImporting ? <Loader className="animate-spin" size={20}/> : 'Import Contacts'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* BULK ASSIGN MODAL - HIDDEN FOR AGENTS */}
+        {showAssignModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className={`border rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${isDarkMode ? 'bg-[#0f172a] border-white/10' : 'bg-white border-gray-200'}`}>
+                    <div className={`p-5 border-b flex justify-between items-center ${isDarkMode ? 'bg-[#1e293b] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                        <div><h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Assign Leads</h3><p className="text-xs text-slate-400">Distribute leads to your team</p></div>
+                        <button onClick={() => setShowAssignModal(false)} className="p-2 hover:bg-black/10 rounded-full text-slate-400 transition"><X size={18}/></button>
+                    </div>
+
+                    <div className="p-5 overflow-y-auto custom-scrollbar space-y-6">
+                        {selectedIds.length === 0 && (
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#1e293b]/50 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
+                                <h4 className={`text-sm font-bold mb-3 flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><Zap size={16} className="text-amber-500"/> Quick Auto-Assign</h4>
+                                <div className="space-y-3">
+                                    <p className="text-xs text-slate-400">Select amount and direction:</p>
+                                    <div className="flex items-center gap-2">
+                                        <input type="number" min="1" max="100" value={assignAmount} onChange={(e) => setAssignAmount(Math.max(1, parseInt(e.target.value) || 1))} className={`w-16 border rounded-lg p-2 text-center text-sm focus:outline-none focus:border-amber-500 ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'}`}/>
+                                        <div className={`flex-1 flex p-1 rounded-lg border ${isDarkMode ? 'bg-black/20 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
+                                            <button onClick={() => setAssignDirection('newest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'newest' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-black'}`}>
+                                                <ArrowUp size={12}/> Newest (Top)
+                                            </button>
+                                            <button onClick={() => setAssignDirection('oldest')} className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition ${assignDirection === 'oldest' ? 'bg-blue-500 text-white shadow' : 'text-slate-400 hover:text-black'}`}>
+                                                <ArrowDown size={12}/> Oldest (Bottom)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div>
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Select Agent</h4>
+                            <div className="space-y-2">
+                                {agents.length === 0 ? <div className={`text-center p-4 text-slate-500 rounded-xl border border-dashed ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}><Users size={32} className="mx-auto mb-2 opacity-50"/><p className="text-sm">No agents available.</p></div> : agents.map(agent => (
+                                    <div key={agent._id} className={`flex items-center justify-between p-3 rounded-xl border transition group ${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}>
+                                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{agent.name.charAt(0).toUpperCase()}</div><div><h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{agent.name}</h4><p className="text-[10px] text-slate-400">{agent.email}</p></div></div>
+                                        <button onClick={() => handleBulkAssign(agent._id, selectedIds.length === 0)} className={`px-4 py-2 ${selectedIds.length === 0 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500 hover:text-black' : (isDarkMode ? 'bg-white/5 text-slate-300 hover:bg-white/20 hover:text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-black')} rounded-lg text-xs font-bold transition flex items-center gap-2`}>
+                                            {selectedIds.length === 0 ? `Assign ${assignAmount} (${assignDirection === 'newest' ? 'Top' : 'Bottom'})` : 'Assign Selected'} <ChevronRight size={14}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
   );
 
