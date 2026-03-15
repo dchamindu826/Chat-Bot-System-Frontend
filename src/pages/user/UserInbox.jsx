@@ -337,6 +337,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       return () => { if (msgInterval) clearInterval(msgInterval); }
   }, [selectedContact, token]);
 
+  useEffect(() => { 
+      const timer = setTimeout(() => {
+          if (scrollRef.current) {
+              scrollRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+          }
+      }, 100); 
+      return () => clearTimeout(timer);
+  }, [messages, selectedContact, mediaPreview, replyingTo]);
+
   const formatPhoneNumber = (phone) => {
       let cleaned = phone.replace(/\D/g, '');
       if (cleaned.startsWith('0')) return '94' + cleaned.substring(1);
