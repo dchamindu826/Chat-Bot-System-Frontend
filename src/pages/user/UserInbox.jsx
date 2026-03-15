@@ -127,32 +127,100 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           }
       } catch(err) { console.error(err); }
   };
-
+    
   const handleSendTemplateMessage = async (template) => {
-      if(!selectedContact) return;
+      if(!selectedContact) {
+          alert("❌ Error: No contact selected!");
+          return;
+      }
+      
       setSending(true);
+
+      // 🔥 අලුත් Update එක: Database එකේ Name එකට Number එක සේව් වෙලා තිබුණත් දැන් අල්ලගන්නවා
+      let targetPhone = selectedContact.phoneNumber || selectedContact.phone_number || selectedContact.phone || selectedContact.name || "";
+      let targetId = selectedContact._id || selectedContact.id || "";
+
+      // ඉලක්කම් විතරක් ඉතුරු වෙන්න සුද්ද කරනවා
+      targetPhone = targetPhone.toString().replace(/\D/g, '');
+
+      // Meta API එකට යවන්න Country Code (94) අනිවාර්යයි. 0 න් පටන් ගන්නවා නම් ඒක 94 කරනවා.
+      if (targetPhone.startsWith('0')) {
+          targetPhone = '94' + targetPhone.substring(1);
+      }
+
+      if (!targetPhone || targetPhone.trim() === "") {
+          alert(`❌ Error: Cannot find a valid phone number!\nContact Data in System: ${JSON.stringify(selectedContact)}`);
+          setSending(false);
+          return;
+      }
+
+      let sendComponents = [];
+      if (template.components) {
+          const header = template.components.find(c => c.type === 'HEADER');
+          if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
+              let mediaLink = "https://lumi-automation.com/default-header.png"; 
+              if (header.example && header.example.header_url && header.example.header_url[0]) {
+                  mediaLink = header.example.header_url[0];
+              }
+              sendComponents.push({
+                  type: "header",
+                  parameters: [{
+                      type: header.format.toLowerCase(), 
+                      [header.format.toLowerCase()]: { link: mediaLink }
+                  }]
+              });
+          }
+
+          const body = template.components.find(c => c.type === 'BODY');
+          if (body && body.text && body.text.includes('{{1}}')) {
+              const varCount = (body.text.match(/{{/g) || []).length;
+              let params = [];
+              for(let i=0; i<varCount; i++) {
+                  // නමට නම්බර් එක සේව් වෙලා නම්, Message එකේ නම විදිහට "Customer" කියලා යවනවා
+                  let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
+                      ? selectedContact.name 
+                      : "Customer";
+                  params.push({ type: "text", text: customerName });
+              }
+              sendComponents.push({ type: "body", parameters: params });
+          }
+      }
+
       try {
+          const payload = {
+              contactId: targetId,
+              to: targetPhone,              
+              templateName: template.name,
+              language: template.language || 'en_US',
+              components: sendComponents
+          };
+
+          console.log("🚀 Payload to Backend:", JSON.stringify(payload, null, 2));
+
           const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
-              body: JSON.stringify({
-                  contactId: selectedContact._id,
-                  to: selectedContact.phoneNumber,
-                  templateName: template.name,
-                  language: template.language
-              })
+              body: JSON.stringify(payload)
           });
           
           if(res.ok) {
               const sentMsg = await res.json();
               setMessages(prev => [...prev, sentMsg]);
               setShowSendTemplateModal(false);
-              setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: `Sent Template: ${template.name}`, lastMessageTime: new Date().toISOString() } : c));
+              setContacts(prev => prev.map(c => (c._id === targetId || c.id === targetId) ? { ...c, lastMessage: `Sent Template: ${template.name}`, lastMessageTime: new Date().toISOString() } : c));
+              alert("✅ Template Sent Successfully!");
+          } else {
+              const errorData = await res.json();
+              console.error("Meta API Error:", errorData);
+              alert(`❌ Message Failed: ${errorData.message}`);
           }
-      } catch(err) { alert("Message Failed!"); } 
+      } catch(err) { 
+          alert("❌ Message Failed! Check your internet connection."); 
+          console.error(err);
+      } 
       finally { setSending(false); }
   };
-
+  
   const fetchQuickReplies = async () => {
       try {
           const res = await fetch(`${API_BASE_URL}/api/quick-replies/my`, { headers: { token: `Bearer ${token}` } });
