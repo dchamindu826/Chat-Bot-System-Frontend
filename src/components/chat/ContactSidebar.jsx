@@ -14,8 +14,31 @@ const ContactSidebar = (props) => {
         ? ['Imported', 'Assigned', 'All'] 
         : ['New Chat', 'Imported', 'Assigned', 'All'];
 
+    // DATE FORMATTER: WhatsApp Style (Today -> Time, Yesterday -> Yesterday + Time, Older -> Date)
+    const formatSidebarDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        if (date.toDateString() === today.toDateString()) {
+            return timeStr;
+        } else if (date.toDateString() === yesterday.toDateString()) {
+            return `Yesterday, ${timeStr}`;
+        } else {
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}/${mm}/${dd}`;
+        }
+    };
+
     const renderedContactsList = useMemo(() => {
-        // Removed the slice(0, 50) constraint - Now all 3000+ will load and scroll
         return filteredContacts.map(contact => {
             const rawAssigned = contact.assignedTo || contact.assigned_to;
             const assignedAgentObj = typeof rawAssigned === 'object' ? rawAssigned : agents.find(a => a._id === rawAssigned);
@@ -25,7 +48,6 @@ const ContactSidebar = (props) => {
             const phone = contact.phoneNumber || contact.phone_number || "";
             const cId = contact._id || contact.id;
             
-            // Replaced "Guest" names with phone number
             const displayName = (contact.name && !contact.name.toLowerCase().includes('guest')) ? contact.name : phone;
   
             return (
@@ -46,8 +68,8 @@ const ContactSidebar = (props) => {
                                     </span>
                                 )}
                             </div>
-                            <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>
-                                {contact.lastMessageTime || contact.last_message_time ? new Date(contact.lastMessageTime || contact.last_message_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}
+                            <span className={`text-[10px] font-medium whitespace-nowrap ml-2 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                                {formatSidebarDate(contact.lastMessageTime || contact.last_message_time)}
                             </span>
                         </div>
                         {(contact.name && !contact.name.toLowerCase().includes('guest') && contact.name !== phone) && <p className="text-[10px] text-slate-500 truncate">{phone}</p>}
@@ -96,15 +118,39 @@ const ContactSidebar = (props) => {
                         {tabsToShow.map(tab => {
                             let badgeCount = 0;
                             const uId = userId;
+
+                            // 1. කලින් Select කරපු Filters (Agent, Status, Phase) වලට අදාලව Contacts ටික පෙරලා ගන්නවා
+                            const filterBaseContacts = contacts.filter(c => {
+                                const rawAssigned = c.assignedTo || c.assigned_to;
+                                const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
+                                
+                                let mAgent = true;
+                                if (userRole !== 'agent' && selectedAgentFilter !== 'All') {
+                                    mAgent = assignedId && String(assignedId).trim() === String(selectedAgentFilter).trim();
+                                }
+                        
+                                let mStatus = true;
+                                if (selectedStatusFilter !== 'All') {
+                                    const cStatus = c.callStatus || c.call_status || 'pending';
+                                    mStatus = cStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
+                                }
+                        
+                                let mPhase = true;
+                                if (selectedPhaseFilter !== 'All') {
+                                    const cPhase = c.phase || c.status || 1;
+                                    mPhase = String(cPhase) === selectedPhaseFilter;
+                                }
+                                return mAgent && mStatus && mPhase;
+                            });
                             
-                            // UNREAD COUNT LOGIC UPDATE: Unique numbers only
+                            // 2. ඒ Filter වුන අයට අදාලව Unique Unread count එක හදනවා
                             const uniqueUnreadCount = (arr) => new Set(arr.filter(c => c.unreadCount > 0 || c.unread_count > 0).map(c => c.phoneNumber || c.phone_number)).size;
                             
                             if (tab === 'New Chat') {
-                                badgeCount = uniqueUnreadCount(contacts.filter(c => !c.assignedTo && !c.assigned_to && c.lastMessage !== 'Created Manually' && c.lastMessage !== 'Imported via CSV' && c.last_message !== 'Created Manually' && c.last_message !== 'Imported via CSV'));
+                                badgeCount = uniqueUnreadCount(filterBaseContacts.filter(c => !c.assignedTo && !c.assigned_to && c.lastMessage !== 'Created Manually' && c.lastMessage !== 'Imported via CSV' && c.last_message !== 'Created Manually' && c.last_message !== 'Imported via CSV'));
                             } else if (tab === 'Imported') {
                                 if (userRole === 'agent') {
-                                    badgeCount = uniqueUnreadCount(contacts.filter(c => {
+                                    badgeCount = uniqueUnreadCount(filterBaseContacts.filter(c => {
                                         const rawAssigned = c.assignedTo || c.assigned_to;
                                         const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
                                         const msgText = c.lastMessage || c.last_message || "";
@@ -112,20 +158,20 @@ const ContactSidebar = (props) => {
                                         return assignedId && String(assignedId).trim() === String(uId).trim() && isImport;
                                     }));
                                 } else {
-                                    badgeCount = uniqueUnreadCount(contacts.filter(c => !c.assignedTo && !c.assigned_to && (c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV' || c.last_message === 'Created Manually' || c.last_message === 'Imported via CSV')));
+                                    badgeCount = uniqueUnreadCount(filterBaseContacts.filter(c => !c.assignedTo && !c.assigned_to && (c.lastMessage === 'Created Manually' || c.lastMessage === 'Imported via CSV' || c.last_message === 'Created Manually' || c.last_message === 'Imported via CSV')));
                                 }
                             } else if (tab === 'Assigned') {
                                 if (userRole === 'agent') {
-                                    badgeCount = uniqueUnreadCount(contacts.filter(c => {
+                                    badgeCount = uniqueUnreadCount(filterBaseContacts.filter(c => {
                                         const rawAssigned = c.assignedTo || c.assigned_to;
                                         const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
                                         return assignedId && String(assignedId).trim() === String(uId).trim();
                                     }));
                                 } else {
-                                    badgeCount = uniqueUnreadCount(contacts.filter(c => (c.assignedTo || c.assigned_to)));
+                                    badgeCount = uniqueUnreadCount(filterBaseContacts.filter(c => (c.assignedTo || c.assigned_to)));
                                 }
                             } else if (tab === 'All') {
-                                badgeCount = uniqueUnreadCount(contacts);
+                                badgeCount = uniqueUnreadCount(filterBaseContacts);
                             }
                             
                             return (
