@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Bot, Settings, LogOut, 
   MessageSquare, Box, ShieldAlert, Zap, Bell, Search, User,
-  LayoutTemplate // 🔥 Broadcast Icon Removed
+  LayoutTemplate, BarChart2 // 🔥 Broadcast Icon Removed
 } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
@@ -30,11 +30,10 @@ const MainLayout = ({ children }) => {
   const userMenu = [
     { name: 'Overview', path: '/user/dashboard', icon: LayoutDashboard },
     { name: 'Inbox (CRM)', path: '/user/inbox', icon: MessageSquare },
+    { name: 'Agent Stats', path: '/user/agent-stats', icon: BarChart2 },
     { name: 'My Team', path: '/user/team', icon: Users },
     { name: 'My Bot', path: '/user/my-bot', icon: Bot },
-    
     { name: 'Templates', path: '/user/templates', icon: LayoutTemplate }, // ✅ Templates Only
-    
     { name: 'Tools', path: '/user/tools', icon: Box },
     { name: 'Settings', path: '/user/settings', icon: Settings },
   ];

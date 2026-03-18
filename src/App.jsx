@@ -21,6 +21,7 @@ import UserSettings from './pages/user/UserSettings';
 import UserTeam from './pages/user/UserTeam';
 import UserAgentDash from './pages/user/UserAgentDash';
 import UserTemplates from './pages/user/UserTemplates';
+import AgentStats from './pages/user/AgentStats';
 
 
 const ProtectedRoute = ({ children, allowedRole }) => {
@@ -72,6 +73,8 @@ function App() {
                 <Routes>
                    <Route path="dashboard" element={<UserDashboard />} />
                    <Route path="inbox" element={<UserInbox />} />
+                   <Route path="team" element={<UserTeam />} />
+                   <Route path="agent-stats" element={<AgentStats />} />
                    <Route path="team" element={<UserTeam />} />
                    <Route path="my-bot" element={<UserBotConfig />} />
                    <Route path="tools" element={<UserTools />} />

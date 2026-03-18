@@ -1,6 +1,6 @@
 import React from 'react';
-// PlusCircle is properly imported now
-import { Paperclip, Zap, LayoutTemplate, Send, Mic, X, StopCircle, Trash2, MessageSquare, Loader, FileText, Play, Download, VideoIcon, ClipboardList, CheckCheck, PlusCircle } from 'lucide-react';
+// PlusCircle & Reply are properly imported now
+import { Paperclip, Zap, LayoutTemplate, Send, Mic, X, StopCircle, Trash2, MessageSquare, Loader, FileText, Play, Download, VideoIcon, ClipboardList, CheckCheck, PlusCircle, Reply } from 'lucide-react';
 
 const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
 
@@ -28,6 +28,7 @@ const ChatArea = (props) => {
             </div>
         );
     }
+    
 
     return (
         <div className={`flex-1 flex flex-col h-full overflow-hidden relative transition-colors duration-300 border-x ${currentTheme.bg} ${theme === 'light' ? 'border-gray-300' : 'border-slate-600'}`}>
@@ -112,7 +113,20 @@ const ChatArea = (props) => {
                                 </span>
                             )}
 
-                            <div className={`p-3 rounded-2xl shadow-sm border border-black/5 ${isMe ? `${currentTheme.bubbleMe} rounded-tr-none` : `${currentTheme.bubbleThem} rounded-tl-none`}`}>
+                            {/* 👇 මෙතනට තමා relative සහ group දැම්මේ hover effect එක ගන්න */}
+                            <div className={`relative group p-3 rounded-2xl shadow-sm border border-black/5 ${isMe ? `${currentTheme.bubbleMe} rounded-tr-none` : `${currentTheme.bubbleThem} rounded-tl-none`}`}>
+                                
+                                {/* 👇 Hover කරද්දි එන Reply Button එක */}
+                                <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 ${isMe ? '-left-10' : '-right-10'}`}>
+                                    <button 
+                                        onClick={() => setReplyingTo(msg)} 
+                                        className="p-1.5 bg-black/10 backdrop-blur-sm rounded-full text-slate-500 hover:text-white hover:bg-black/30 shadow-md border border-white/10 transition-colors"
+                                        title="Reply to message"
+                                    >
+                                        <Reply size={14} />
+                                    </button>
+                                </div>
+
                                 {msg.replyContext && (
                                     <div className={`mb-2 p-2.5 rounded-lg border-l-4 opacity-90 text-[11px] font-medium truncate bg-black/20 text-white/80 border-white/30`}>
                                         <span className="font-bold mr-2 opacity-70">Replied to:</span>
@@ -265,7 +279,6 @@ const ChatArea = (props) => {
                                             </div>
                                         </div>
                                     ) : (
-                                        // FIX: PlusCircle is now correctly imported
                                         <button onClick={() => setIsCreatingTemplate(true)} className={`w-full py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition ${isDarkMode ? 'bg-white/5 hover:bg-white/10 text-slate-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}><PlusCircle size={14}/> Create New</button>
                                     )}
                                 </div>
