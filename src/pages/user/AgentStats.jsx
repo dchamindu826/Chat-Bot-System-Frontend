@@ -2,70 +2,78 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { BarChart2, MessageCircle, Users, Send, Calendar, Percent } from 'lucide-react';
 import MainLayout from '../../layouts/MainLayout';
-
 import { API_BASE_URL } from '../../config';
+
+// Datetime-local Input එකට හරියන විදිහට Local Time එක හදාගන්න Function එකක්
+const getLocalISOString = (date) => {
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm format එක
+};
 
 const AgentStats = () => {
     const [data, setData] = useState({ summary: {}, agents: [] });
     const [loading, setLoading] = useState(true);
     
-    // Default දවස විදිහට අද දවස ගන්නවා (YYYY-MM-DD)
-    const todayStr = new Date().toISOString().split('T')[0];
-    const [startDate, setStartDate] = useState(todayStr);
-    const [endDate, setEndDate] = useState(todayStr);
+    // Default Start Time -> අද උදේ 9:00
+    const today9AM = new Date();
+    today9AM.setHours(9, 0, 0, 0);
+    const [startDateTime, setStartDateTime] = useState(getLocalISOString(today9AM));
+
+    // Default End Time -> දැනට තියෙන වෙලාව (Current Time)
+    const now = new Date();
+    const [endDateTime, setEndDateTime] = useState(getLocalISOString(now));
 
     useEffect(() => {
         fetchStats();
-    }, [startDate, endDate]); // Dates වෙනස් වෙද්දී Auto fetch වෙනවා
+    }, [startDateTime, endDateTime]); 
 
     const fetchStats = async () => {
-    setLoading(true);
-    try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_BASE_URL}/api/team/agent-stats?startDate=${startDate}T00:00:00&endDate=${endDate}T23:59:59`, {
-            
-            // 👇 මෙන්න මෙතන Authorization වෙනුවට token කියලා දෙන්න
-            headers: { token: `Bearer ${token}` } 
-            
-        });
-        setData(res.data);
-        setLoading(false);
-    } catch (error) {
-        console.error("Error fetching stats:", error);
-        setLoading(false); 
-    }
-};
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            // තත්පර ගාණත් (:00 සහ :59) එක්කම URL එකට යවනවා
+            const res = await axios.get(`${API_BASE_URL}/api/team/agent-stats?startDate=${startDateTime}:00&endDate=${endDateTime}:59`, {
+                headers: { token: `Bearer ${token}` }
+            });
+            setData(res.data);
+            setLoading(false);
+        } catch (error) {
+            console.error("Error fetching stats:", error);
+            setLoading(false);
+        }
+    };
 
     return (
         <MainLayout>
             <div className="p-6 max-w-7xl mx-auto">
                 
-                {/* Header & Date Filters */}
+                {/* Header & Date-Time Filters */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                             <BarChart2 className="text-blue-500" />
                             Analytics & Agent Performance
                         </h1>
-                        <p className="text-slate-400 text-sm mt-1">Filter by date to see response rates and agent activity.</p>
+                        <p className="text-slate-400 text-sm mt-1">Filter by date and time to see accurate response rates.</p>
                     </div>
 
                     <div className="flex items-center gap-3 bg-[#1e293b]/50 p-2 rounded-xl border border-white/10 backdrop-blur-md">
                         <div className="flex items-center gap-2 px-2">
                             <Calendar size={16} className="text-slate-400" />
                             <input 
-                                type="date" 
-                                value={startDate} 
-                                onChange={(e) => setStartDate(e.target.value)}
+                                type="datetime-local" 
+                                value={startDateTime} 
+                                onChange={(e) => setStartDateTime(e.target.value)}
                                 className="bg-transparent text-white text-sm outline-none cursor-pointer"
                             />
                         </div>
                         <span className="text-slate-500">to</span>
                         <div className="flex items-center gap-2 px-2">
                             <input 
-                                type="date" 
-                                value={endDate} 
-                                onChange={(e) => setEndDate(e.target.value)}
+                                type="datetime-local" 
+                                value={endDateTime} 
+                                onChange={(e) => setEndDateTime(e.target.value)}
                                 className="bg-transparent text-white text-sm outline-none cursor-pointer"
                             />
                         </div>
