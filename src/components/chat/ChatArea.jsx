@@ -4,6 +4,23 @@ import { Paperclip, Zap, LayoutTemplate, Send, Mic, X, StopCircle, Trash2, Messa
 
 const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
 
+// 👇 දිනය ලස්සනට Format කරන Function එක
+const formatDateLabel = (dateInput) => {
+    if (!dateInput) return '';
+    const date = new Date(dateInput);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+        return 'Today';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday';
+    } else {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+};
+
 const ChatArea = (props) => {
     const {
         selectedContact, messages, loading, isDarkMode, agents,
@@ -90,7 +107,23 @@ const ChatArea = (props) => {
                     const cleanText = text.replace(/[\u200B-\u200D\uFEFF\s\n]/g, '');
                     if (!hasMedia && !isTemplate && cleanText === "") return false;
                     return true;
-                }).map((msg, index) => {
+                }).map((msg, index, arr) => {
+                    
+                    // 👇 දිනය පරීක්ෂා කරන කොටස (අලුත් දවසක්ද කියලා බලනවා)
+                    const msgDateValue = msg.created_at || msg.createdAt || Date.now();
+                    const currentMsgDate = new Date(msgDateValue).toDateString();
+                    let showDateSeparator = false;
+
+                    if (index === 0) {
+                        showDateSeparator = true;
+                    } else {
+                        const prevMsgDateValue = arr[index - 1].created_at || arr[index - 1].createdAt || Date.now();
+                        const prevMsgDate = new Date(prevMsgDateValue).toDateString();
+                        if (currentMsgDate !== prevMsgDate) {
+                            showDateSeparator = true;
+                        }
+                    }
+
                     const isMe = msg.direction === 'outbound' || msg.sender === 'me';
                     const agentName = msg.agentName || msg.agent_name || 'System';
                     const mediaUrl = msg.mediaUrl || msg.media_url || (msg.type !== 'text' && msg.type !== 'template' ? msg.content : null);
@@ -102,78 +135,88 @@ const ChatArea = (props) => {
                     const isCaption = msgText && msgText !== mediaUrl;
 
                     return (
-                        <div key={msg._id || msg.id || index} className={`flex flex-col max-w-[75%] ${isMe ? 'self-end items-end' : 'self-start items-start'} mb-2`}>
-                            {isMe && (
-                                <span className="text-[10px] font-bold mb-1 flex items-center gap-1">
-                                    {msg.type === 'Bot' ? (
-                                        <span className="text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">Bot Reply</span>
-                                    ) : (
-                                        <span className="text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">Sent by: {agentName}</span>
-                                    )}
-                                </span>
+                        <React.Fragment key={msg._id || msg.id || index}>
+                            
+                            {/* 👇 දිනය පෙන්වන Badge එක */}
+                            {showDateSeparator && (
+                                <div className="flex justify-center my-3 relative z-10">
+                                    <span className={`text-[10px] font-bold px-3 py-1 rounded-lg backdrop-blur-md shadow-sm border ${isDarkMode ? 'bg-[#1e293b]/80 text-slate-400 border-white/5' : 'bg-white/80 text-slate-500 border-black/5'}`}>
+                                        {formatDateLabel(msgDateValue)}
+                                    </span>
+                                </div>
                             )}
 
-                            {/* 👇 මෙතනට තමා relative සහ group දැම්මේ hover effect එක ගන්න */}
-                            <div className={`relative group p-3 rounded-2xl shadow-sm border border-black/5 ${isMe ? `${currentTheme.bubbleMe} rounded-tr-none` : `${currentTheme.bubbleThem} rounded-tl-none`}`}>
-                                
-                                {/* 👇 Hover කරද්දි එන Reply Button එක */}
-                                <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 ${isMe ? '-left-10' : '-right-10'}`}>
-                                    <button 
-                                        onClick={() => setReplyingTo(msg)} 
-                                        className="p-1.5 bg-black/10 backdrop-blur-sm rounded-full text-slate-500 hover:text-white hover:bg-black/30 shadow-md border border-white/10 transition-colors"
-                                        title="Reply to message"
-                                    >
-                                        <Reply size={14} />
-                                    </button>
-                                </div>
-
-                                {msg.replyContext && (
-                                    <div className={`mb-2 p-2.5 rounded-lg border-l-4 opacity-90 text-[11px] font-medium truncate bg-black/20 text-white/80 border-white/30`}>
-                                        <span className="font-bold mr-2 opacity-70">Replied to:</span>
-                                        {msg.replyContext}
-                                    </div>
-                                )}
-
-                                {hasMedia && (
-                                    <div className={`mb-2 rounded-lg overflow-hidden w-full ${isCaption ? 'border-b border-black/10 pb-2' : ''}`}>
-                                        {msg.type === 'image' ? (
-                                            <img 
-                                                src={mediaUrl} 
-                                                className="w-full h-auto max-h-[450px] object-contain rounded-lg hover:scale-[1.02] transition-transform cursor-pointer" 
-                                                alt="sent content" 
-                                                onClick={() => window.open(mediaUrl, '_blank')}
-                                            />
-                                        ) : msg.type === 'video' ? (
-                                            <video controls src={mediaUrl} className="w-full max-h-[350px] rounded-lg bg-black" />
-                                        ) : msg.type === 'audio' ? (
-                                            <div className="flex items-center gap-2 p-2 rounded-lg bg-black/20"><Play size={16}/><audio controls src={mediaUrl} className="w-full h-8 opacity-80" /></div>
+                            <div className={`flex flex-col max-w-[75%] ${isMe ? 'self-end items-end' : 'self-start items-start'} mb-2`}>
+                                {isMe && (
+                                    <span className="text-[10px] font-bold mb-1 flex items-center gap-1">
+                                        {msg.type === 'Bot' ? (
+                                            <span className="text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">Bot Reply</span>
                                         ) : (
-                                            <a href={mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 rounded-lg bg-black/10 hover:bg-black/20 transition">
-                                                <FileText size={20}/><span className="text-sm font-bold truncate">Attached File</span><Download size={14}/>
-                                            </a>
+                                            <span className="text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">Sent by: {agentName}</span>
                                         )}
+                                    </span>
+                                )}
+
+                                <div className={`relative group p-3 rounded-2xl shadow-sm border border-black/5 ${isMe ? `${currentTheme.bubbleMe} rounded-tr-none` : `${currentTheme.bubbleThem} rounded-tl-none`}`}>
+                                    
+                                    <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 ${isMe ? '-left-10' : '-right-10'}`}>
+                                        <button 
+                                            onClick={() => setReplyingTo(msg)} 
+                                            className="p-1.5 bg-black/10 backdrop-blur-sm rounded-full text-slate-500 hover:text-white hover:bg-black/30 shadow-md border border-white/10 transition-colors"
+                                            title="Reply to message"
+                                        >
+                                            <Reply size={14} />
+                                        </button>
                                     </div>
-                                )}
-                                
-                                {msg.type === 'template' && (
-                                    <div className="flex items-center gap-2 mb-1 opacity-70">
-                                        <LayoutTemplate size={14}/>
-                                        <span className="text-xs font-bold">Template Sent</span>
+
+                                    {msg.replyContext && (
+                                        <div className={`mb-2 p-2.5 rounded-lg border-l-4 opacity-90 text-[11px] font-medium truncate bg-black/20 text-white/80 border-white/30`}>
+                                            <span className="font-bold mr-2 opacity-70">Replied to:</span>
+                                            {msg.replyContext}
+                                        </div>
+                                    )}
+
+                                    {hasMedia && (
+                                        <div className={`mb-2 rounded-lg overflow-hidden w-full ${isCaption ? 'border-b border-black/10 pb-2' : ''}`}>
+                                            {msg.type === 'image' ? (
+                                                <img 
+                                                    src={mediaUrl} 
+                                                    className="w-full h-auto max-h-[450px] object-contain rounded-lg hover:scale-[1.02] transition-transform cursor-pointer" 
+                                                    alt="sent content" 
+                                                    onClick={() => window.open(mediaUrl, '_blank')}
+                                                />
+                                            ) : msg.type === 'video' ? (
+                                                <video controls src={mediaUrl} className="w-full max-h-[350px] rounded-lg bg-black" />
+                                            ) : msg.type === 'audio' ? (
+                                                <div className="flex items-center gap-2 p-2 rounded-lg bg-black/20"><Play size={16}/><audio controls src={mediaUrl} className="w-full h-8 opacity-80" /></div>
+                                            ) : (
+                                                <a href={mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 rounded-lg bg-black/10 hover:bg-black/20 transition">
+                                                    <FileText size={20}/><span className="text-sm font-bold truncate">Attached File</span><Download size={14}/>
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+                                    
+                                    {msg.type === 'template' && (
+                                        <div className="flex items-center gap-2 mb-1 opacity-70">
+                                            <LayoutTemplate size={14}/>
+                                            <span className="text-xs font-bold">Template Sent</span>
+                                        </div>
+                                    )}
+                                    
+                                    {(isCaption || (!hasMedia && msgText !== "")) && (
+                                        <p className={`whitespace-pre-wrap leading-relaxed ${FONT_SIZES[fontIndex]}`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                            {msgText}
+                                        </p>
+                                    )}
+                                    
+                                    <div className="text-[10px] mt-1.5 text-right opacity-70 flex justify-end gap-1 items-center">
+                                        {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                        {isMe && <CheckCheck size={12}/>}
                                     </div>
-                                )}
-                                
-                                {(isCaption || (!hasMedia && msgText !== "")) && (
-                                    <p className={`whitespace-pre-wrap leading-relaxed ${FONT_SIZES[fontIndex]}`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                        {msgText}
-                                    </p>
-                                )}
-                                
-                                <div className="text-[10px] mt-1.5 text-right opacity-70 flex justify-end gap-1 items-center">
-                                    {new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                    {isMe && <CheckCheck size={12}/>}
                                 </div>
                             </div>
-                        </div>
+                        </React.Fragment>
                     );
                 })}
                 {/* Scroll Target */}
