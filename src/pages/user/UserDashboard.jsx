@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios'; // 🔥 අලුතින් Import කරා
 import MainLayout from '../../layouts/MainLayout';
 import { Users, PhoneCall, MessageCircle, TrendingUp, BarChart2, Download, Layers, Filter, Clock, Calendar } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
@@ -8,7 +9,7 @@ const UserDashboard = () => {
   const [activePhase, setActivePhase] = useState('All'); 
   const [timeFilter, setTimeFilter] = useState('All'); 
   
-  // 🔥 NEW: Date range states
+  // Date range states
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   
@@ -16,6 +17,7 @@ const UserDashboard = () => {
   const [report, setReport] = useState([]);
   const [loading, setLoading] = useState(false);
   const token = localStorage.getItem('token');
+  const [autoFollowup, setAutoFollowup] = useState(false);
 
   const fetchData = async (phase, time, start, end) => {
     setLoading(true);
@@ -23,7 +25,7 @@ const UserDashboard = () => {
         let queryParams = new URLSearchParams();
         if (phase !== 'All') queryParams.append('phase', phase);
         
-        // 🔥 Handle Time Filters
+        // Handle Time Filters
         if (time === 'today') {
             queryParams.append('time', 'today');
         } else if (time === 'custom') {
@@ -49,6 +51,24 @@ const UserDashboard = () => {
         setLoading(false);
     }
   };
+  
+  useEffect(() => {
+      const fetchSettings = async () => {
+          try {
+              const res = await axios.get(`${API_BASE_URL}/api/users/settings`, {
+                  headers: { token: `Bearer ${localStorage.getItem('token')}` }
+              });
+              
+              // Database එකේ තියෙන අගය Button එකට Set කරනවා
+              // (null හරි false හරි නම් false, true නම් true)
+              setAutoFollowup(res.data.auto_followup_enabled === true); 
+          } catch (error) {
+              console.error("Failed to fetch follow-up settings", error);
+          }
+      };
+      
+      fetchSettings();
+  }, []);
 
   useEffect(() => {
     // Custom filter දාලා තියෙනකොට Dates දෙකම select කරනකන් API call එක යවන්නේ නෑ
@@ -89,7 +109,6 @@ const UserDashboard = () => {
     document.body.removeChild(link);
   };
 
-  // Helper function to render Current View text dynamically
   const getCurrentViewText = () => {
       if (timeFilter === 'today') return "Today's Stats";
       if (timeFilter === 'custom' && startDate && endDate) return `${startDate} to ${endDate}`;
@@ -97,10 +116,12 @@ const UserDashboard = () => {
       return activePhase === 'All' ? "All Phases" : `Phase 0${activePhase}`;
   };
 
+  // 🔥 එළියේ තිබ්බ JSX ඔක්කොම මෙතනින් පල්ලෙහා return එක ඇතුළට ගෙනාවා
   return (
     <MainLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
         
+        {/* Header Section */}
         <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-[#1e293b]/60 p-4 rounded-3xl border border-white/5 backdrop-blur-md">
             <div>
                 <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -111,7 +132,7 @@ const UserDashboard = () => {
 
             <div className="flex flex-col lg:flex-row gap-3 items-center flex-wrap justify-end">
                 
-                {/* 🔥 Custom Date Picker View */}
+                {/* Custom Date Picker View */}
                 {timeFilter === 'custom' && (
                     <div className="flex items-center gap-2 bg-[#0f172a]/50 p-1.5 rounded-xl border border-white/10 animate-in fade-in slide-in-from-right-4">
                         <input 
@@ -173,6 +194,36 @@ const UserDashboard = () => {
             </div>
         </div>
 
+        {/* 🔥 Auto Follow-up Settings Toggle (Moved Inside Return) */}
+        <div className="flex items-center justify-between p-5 bg-slate-800/40 rounded-2xl border border-white/5 shadow-sm">
+            <div>
+                <h3 className="text-white font-bold text-sm">Auto Follow-up Message (20-Hour Rule)</h3>
+                <p className="text-slate-400 text-xs mt-1">
+                    Send an automatic interactive message to unread chats after 20 hours to keep the 24-hour window open.
+                </p>
+            </div>
+            
+            <button 
+                onClick={async () => {
+                    const newValue = !autoFollowup;
+                    setAutoFollowup(newValue);
+                    try {
+                        await axios.put(`${API_BASE_URL}/api/users/update-settings`, { 
+                            auto_followup_enabled: newValue 
+                        }, { headers: { token: `Bearer ${localStorage.getItem('token')}` } });
+                    } catch (error) {
+                        console.error("Failed to update auto follow-up settings", error);
+                        // Optional: Revert state if API fails
+                        // setAutoFollowup(!newValue);
+                    }
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${autoFollowup ? 'bg-emerald-500' : 'bg-slate-600'}`}
+            >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoFollowup ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+        </div>
+
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <StatsCard 
                 title={activePhase === 'All' ? "Total Leads" : `Phase 0${activePhase} Leads`} 
@@ -201,6 +252,7 @@ const UserDashboard = () => {
             />
         </div>
 
+        {/* Table & Charts Section */}
         <div className="glass-panel p-8 rounded-3xl border border-white/10 bg-[#1e293b]/60 backdrop-blur-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none"/>
 
@@ -279,6 +331,7 @@ const UserDashboard = () => {
             </div>
         </div>
 
+        {/* Chart Section */}
         <div className="h-[350px] glass-panel p-6 rounded-3xl border border-white/5 bg-[#1e293b]/60 backdrop-blur-xl">
             <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <BarChart2 size={18} className="text-slate-400"/> 
