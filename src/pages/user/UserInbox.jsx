@@ -58,7 +58,20 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   const [showSendTemplateModal, setShowSendTemplateModal] = useState(false);
   const [approvedTemplates, setApprovedTemplates] = useState([]);
 
-  const [newMessage, setNewMessage] = useState("");
+  const activeContactRef = useRef(null);
+  useEffect(() => {
+      activeContactRef.current = selectedContact;
+  }, [selectedContact]);
+
+  const [drafts, setDrafts] = useState({});
+  
+  const newMessage = selectedContact && drafts[selectedContact._id] !== undefined ? drafts[selectedContact._id] : "";
+  const setNewMessage = (val) => {
+      if (selectedContact) {
+          setDrafts(prev => ({ ...prev, [selectedContact._id]: val }));
+      }
+  };
+  
   const [sending, setSending] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null); 
   const [uploading, setUploading] = useState(false);
@@ -405,6 +418,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       return () => { if (msgInterval) clearInterval(msgInterval); }
   }, [selectedContact, token]);
 
+  useEffect(() => {
+      setMediaPreview(null);
+      setReplyingTo(null);
+      if (isRecording) {
+          cancelRecording();
+      }
+      setSuggestedReplies([]);
+  }, [selectedContact?._id]);
+
   useEffect(() => { 
       const timer = setTimeout(() => {
           if (scrollRef.current) {
@@ -540,10 +562,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       reader.readAsText(csvFile);
   };
 
-  const handleSendMessage = async (e) => {
+ const handleSendMessage = async (e) => {
       if(e) e.preventDefault();
       if(!selectedContact) return;
-      const textToSend = newMessage.trim(); 
+
+      // 🔥 Send ඔබන තත්පරේම හිටපු කස්ටමර්ගේ ඩේටා ටික Lock කරගන්නවා
+      const targetContact = selectedContact;
+      const targetContactId = targetContact._id;
+
+      const textToSend = (drafts[targetContactId] || "").trim(); 
       const mediaToSend = mediaPreview ? mediaPreview.url : null;
       const typeToSend = mediaPreview ? mediaPreview.type : 'text';
 
@@ -552,8 +579,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       setSending(true);
       try {
           const payload = {
-            contactId: selectedContact._id,
-            to: selectedContact.phoneNumber,
+            contactId: targetContactId,
+            to: targetContact.phoneNumber,
             text: textToSend, 
             type: typeToSend,
             mediaUrl: mediaToSend,
@@ -570,12 +597,20 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           
           if(res.ok) {
               const sentMsg = await res.json();
-              setMessages(prev => [...prev, sentMsg]);
-              setNewMessage("");
-              setMediaPreview(null);
-              setReplyingTo(null); 
-              setSuggestedReplies([]); 
-              setContacts(prev => prev.map(c => c._id === selectedContact._id ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
+              
+              // යවපු කෙනාගේ Draft එක විතරක් මකනවා
+              setDrafts(prev => ({ ...prev, [targetContactId]: "" }));
+              
+              // 🔥 ලොකුම වෙනස: අපි තාමත් ඉන්නේ ඒ යවපු කෙනාගේ Chat එකේද කියලා බලලා විතරක් UI එකට දානවා!
+              if (activeContactRef.current && activeContactRef.current._id === targetContactId) {
+                  setMessages(prev => [...prev, sentMsg]);
+                  setMediaPreview(null);
+                  setReplyingTo(null); 
+                  setSuggestedReplies([]); 
+              }
+              
+              // Contact List එකේ Last Message එක අප්ඩේට් කරනවා
+              setContacts(prev => prev.map(c => c._id === targetContactId ? { ...c, lastMessage: textToSend || "Media File", lastMessageTime: new Date().toISOString() } : c));
           } else {
               alert(`Message Failed: WhatsApp 24h Window Rule might apply.`);
           }
