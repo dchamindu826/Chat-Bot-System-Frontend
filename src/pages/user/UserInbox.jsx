@@ -760,7 +760,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
         }
 
         if (userRole === 'agent') {
-            return matchesTab && matchesStatus && matchesPhase && matchesSearch;
+            // 🔥 Agent ටත් Agent Filter එක අදාළ වෙන්න 'matchesAgent' එක ඇතුලත් කරා
+            return matchesTab && matchesAgent && matchesStatus && matchesPhase && matchesSearch;
         }
 
         return matchesTab && matchesAgent && matchesStatus && matchesPhase && matchesSearch;

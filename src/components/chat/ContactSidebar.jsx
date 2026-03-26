@@ -125,7 +125,7 @@ const ContactSidebar = (props) => {
                                 const assignedId = typeof rawAssigned === 'object' ? (rawAssigned?._id || rawAssigned?.id) : rawAssigned;
                                 
                                 let mAgent = true;
-                                if (userRole !== 'agent' && selectedAgentFilter !== 'All') {
+                                if (selectedAgentFilter !== 'All') {
                                     mAgent = assignedId && String(assignedId).trim() === String(selectedAgentFilter).trim();
                                 }
                         
@@ -188,19 +188,22 @@ const ContactSidebar = (props) => {
                     </div>
                     
                     {(activeTab === 'Assigned' || activeTab === 'All') && (
-                        <div className="flex gap-2">
-                            {userRole !== 'agent' && (
-                                <div className="relative flex-1">
-                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Filter size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                    <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
-                                        <option value="All">All Agents</option>
-                                        {agents.map(a => (<option key={a._id} value={a._id}>{a.name}</option>))}
-                                    </select>
-                                </div>
-                            )}
+                        <div className="flex gap-1.5">
+                            {/* 🔥 Agent Filter එක හැමෝටම පේන්න හැදුවා */}
                             <div className="relative flex-1">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Tag size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                <div className="absolute inset-y-0 left-2 flex items-center pointer-events-none"><Filter size={12} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                <select value={selectedAgentFilter} onChange={(e) => setSelectedAgentFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-7 pr-2 text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                    <option value="All">All Agents</option>
+                                    {/* 🔥 වෙනස කරේ මෙතනයි (a.id එක ගත්තා) */}
+                                    {agents && agents.map(a => (
+                                        <option key={a.id || a._id} value={a.id || a._id}>{a.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            
+                            <div className="relative flex-1">
+                                <div className="absolute inset-y-0 left-2 flex items-center pointer-events-none"><Tag size={12} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                <select value={selectedStatusFilter} onChange={(e) => setSelectedStatusFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-7 pr-2 text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
                                     <option value="All">All Status</option>
                                     <option value="pending">Pending</option>
                                     <option value="answered">Answered</option>
@@ -208,9 +211,10 @@ const ContactSidebar = (props) => {
                                     <option value="no answer">No Answer</option>
                                 </select>
                             </div>
+                            
                             <div className="relative flex-1">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><ClipboardList size={14} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
-                                <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-9 pr-4 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                <div className="absolute inset-y-0 left-2 flex items-center pointer-events-none"><ClipboardList size={12} className={isDarkMode ? 'text-slate-500' : 'text-gray-400'}/></div>
+                                <select value={selectedPhaseFilter} onChange={(e) => setSelectedPhaseFilter(e.target.value)} className={`w-full appearance-none rounded-xl py-2 pl-7 pr-2 text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 border transition-all ${isDarkMode ? 'bg-[#1e293b] text-slate-300 border-white/5' : 'bg-white text-gray-700 border-gray-200'}`}>
                                     <option value="All">All Phases</option>
                                     <option value="1">Phase 1</option>
                                     <option value="2">Phase 2</option>
