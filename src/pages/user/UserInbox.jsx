@@ -164,50 +164,35 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       }
 
       let actualBodyText = "";
-      const bodyObj = template.components.find(c => c.type === 'BODY');
-      if (bodyObj) {
-          actualBodyText = bodyObj.text;
-          let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
-              ? selectedContact.name : "Customer";
-          actualBodyText = actualBodyText.replace(/\{\{1\}\}/g, customerName);
-          actualBodyText = actualBodyText.replace(/\{\{\d+\}\}/g, ""); 
-      }
-
-      let actualMediaUrl = null;
       let sendComponents = [];
+      let actualMediaUrl = null;
 
       if (template.components) {
+          // 🔥 වෙනස: UI එකේ (අපේ Chat Area එකේ) පෙන්නන්න විතරක් පින්තූරෙ ලින්ක් එක ගන්නවා.
+          // හැබැයි මේක Meta එකට යවන 'sendComponents' එකට දාන්නේ නෑ!
           const header = template.components.find(c => c.type === 'HEADER');
           if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
-              
-              // 🔥 FIX: අපි නියම පින්තූරෙ හොයනවා. ඒක නැත්නම්, 100% වැඩ කරන පින්තූරයක් Fallback එකට දෙනවා
-              // (lumi-automation ලින්ක් එක බොරු නිසා ඒක අයින් කළා!)
-              actualMediaUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&auto=format&fit=crop"; 
-              
-              // Meta එකේ Example ලින්ක් එක තියෙනවද කියලා බලනවා
               if (header.example && header.example.header_url && header.example.header_url[0]) {
                   actualMediaUrl = header.example.header_url[0];
               }
-
-              sendComponents.push({
-                  type: "header",
-                  parameters: [{
-                      type: header.format.toLowerCase(), 
-                      [header.format.toLowerCase()]: { link: actualMediaUrl }
-                  }]
-              });
           }
 
           const body = template.components.find(c => c.type === 'BODY');
-          if (body && body.text && body.text.includes('{{1}}')) {
-              const varCount = (body.text.match(/{{/g) || []).length;
-              let params = [];
+          if (body) {
+              actualBodyText = body.text;
               let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
                   ? selectedContact.name : "Customer";
-              for(let i=0; i<varCount; i++) {
-                  params.push({ type: "text", text: customerName });
+              actualBodyText = actualBodyText.replace(/\{\{1\}\}/g, customerName);
+              actualBodyText = actualBodyText.replace(/\{\{\d+\}\}/g, ""); 
+
+              if (body.text.includes('{{1}}')) {
+                  const varCount = (body.text.match(/{{/g) || []).length;
+                  let params = [];
+                  for(let i=0; i<varCount; i++) {
+                      params.push({ type: "text", text: customerName });
+                  }
+                  sendComponents.push({ type: "body", parameters: params }); // Body Parameters විතරක් යවනවා
               }
-              sendComponents.push({ type: "body", parameters: params });
           }
       }
 
@@ -217,9 +202,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               to: targetPhone,              
               templateName: template.name,
               language: template.language || 'en_US',
-              components: sendComponents,
+              components: sendComponents, // 🔥 දැන් මෙතන Header (Image) එක නෑ!
               templateBodyText: actualBodyText || `Template: ${template.name}`,
-              templateMediaUrl: actualMediaUrl // ඇත්ත පින්තූරෙ Backend එකට යනවා
+              templateMediaUrl: actualMediaUrl // අපේ ඩේටාබේස් එකට විතරක් යවනවා
           };
 
           const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
