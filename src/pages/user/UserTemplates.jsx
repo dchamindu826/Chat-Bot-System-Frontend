@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import MainLayout from '../../layouts/MainLayout';
-import { LayoutTemplate, Plus, RefreshCw, CheckCircle, XCircle, Clock, UploadCloud, FileText, X, Loader } from 'lucide-react';
+import { LayoutTemplate, Plus, RefreshCw, CheckCircle, XCircle, Clock, UploadCloud, FileText, X, Loader, Trash2 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 const UserTemplates = () => {
@@ -8,47 +8,54 @@ const UserTemplates = () => {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
   
-  // 🔥 Cloudinary Upload States
   const [uploading, setUploading] = useState(false);
-  const [headerMediaUrl, setHeaderMediaUrl] = useState(null); // Link eka mekata enawa
+  const [headerMediaUrl, setHeaderMediaUrl] = useState(null); 
   
   const token = localStorage.getItem('token');
 
-  // Cloudinary Config (From your previous code)
   const CLOUD_NAME = "dyixoaldi"; 
   const UPLOAD_PRESET = "Chat Bot System"; 
 
-  // Form State
   const [formData, setFormData] = useState({
-    name: '',
-    category: 'MARKETING',
-    language: 'en_US',
-    headerType: 'NONE',
-    headerText: '',
-    bodyText: '',
-    footerText: ''
+    name: '', category: 'MARKETING', language: 'en_US', headerType: 'NONE', headerText: '', bodyText: '', footerText: ''
   });
 
-  // 1. Fetch Templates
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-        const res = await fetch(`${API_BASE_URL}/api/templates`, {
-            headers: { token: `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE_URL}/api/templates`, { headers: { token: `Bearer ${token}` } });
         const data = await res.json();
         if(Array.isArray(data)) setTemplates(data);
         else alert(data.message || "Error fetching templates.");
-    } catch (err) {
-        console.error(err);
-    } finally {
-        setLoading(false);
-    }
+    } catch (err) { console.error(err); } 
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchTemplates(); }, []);
 
-  // 🔥 2. Handle File Upload to Cloudinary (Frontend Upload)
+  // 🔥 DELETE TEMPLATE FUNCTION
+  const handleDeleteTemplate = async (templateName) => {
+      if(!window.confirm(`Are you sure you want to delete '${templateName}'? This will permanently delete it from Meta.`)) return;
+      
+      try {
+          const res = await fetch(`${API_BASE_URL}/api/templates/${templateName}`, {
+              method: 'DELETE',
+              headers: { token: `Bearer ${token}` }
+          });
+          
+          if(res.ok) {
+              alert("Template deleted successfully! ✅");
+              fetchTemplates(); // Refresh List
+          } else {
+              const data = await res.json();
+              alert("Error: " + (data.message || "Could not delete"));
+          }
+      } catch (err) {
+          console.error(err);
+          alert("Failed to delete template.");
+      }
+  };
+
   const handleFileUpload = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -60,62 +67,36 @@ const UserTemplates = () => {
       data.append("cloud_name", CLOUD_NAME);
 
       try {
-          // Cloudinary Upload API Call
-          const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
-              method: "POST",
-              body: data
-          });
-          
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: "POST", body: data });
           const result = await res.json();
-          
           if (result.secure_url) {
-              setHeaderMediaUrl(result.secure_url); // Link eka save karagannawa
-              alert("File Uploaded to Cloudinary! ✅");
+              setHeaderMediaUrl(result.secure_url);
           } else {
               alert("Cloudinary Upload Failed!");
           }
       } catch (error) {
-          console.error("Upload Error:", error);
           alert("Upload Failed");
       } finally {
           setUploading(false);
       }
   };
 
-  // 3. Submit Template (Send JSON with Link)
   const handleSubmit = async (e) => {
       e.preventDefault();
-      
       const nameRegex = /^[a-z0-9_]+$/;
-      if (!nameRegex.test(formData.name)) {
-          return alert("Name must be lowercase letters, numbers, and underscores only.");
-      }
-
-      // Validate Media
-      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(formData.headerType) && !headerMediaUrl) {
-          return alert(`Please upload a ${formData.headerType} first!`);
-      }
+      if (!nameRegex.test(formData.name)) return alert("Name must be lowercase letters, numbers, and underscores only.");
+      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(formData.headerType) && !headerMediaUrl) return alert(`Please upload a ${formData.headerType} first!`);
 
       setLoading(true);
-      
       try {
-        // 🔥 Prepare JSON Data (Not FormData anymore)
-        const payload = {
-            ...formData,
-            headerUrl: headerMediaUrl // Link eka yawanawa
-        };
-
+        const payload = { ...formData, headerUrl: headerMediaUrl };
         const res = await fetch(`${API_BASE_URL}/api/templates/create`, {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json", // JSON widihata yawanawa
-                token: `Bearer ${token}` 
-            },
+            headers: { "Content-Type": "application/json", token: `Bearer ${token}` },
             body: JSON.stringify(payload)
         });
 
         const result = await res.json();
-        
         if (res.ok) {
             alert("Template Submitted for Approval! ✅");
             setFormData({ name: '', category: 'MARKETING', language: 'en_US', headerType: 'NONE', headerText: '', bodyText: '', footerText: '' });
@@ -125,12 +106,8 @@ const UserTemplates = () => {
         } else {
             alert("Error: " + JSON.stringify(result));
         }
-      } catch (err) {
-        console.error(err);
-        alert("Submission Failed");
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { alert("Submission Failed"); } 
+      finally { setLoading(false); }
   };
 
   const getStatusBadge = (status) => {
@@ -144,7 +121,6 @@ const UserTemplates = () => {
   return (
     <MainLayout>
         <div className="p-6 min-h-screen bg-[#0B1120]">
-            
             <div className="flex justify-between items-center mb-6 max-w-5xl mx-auto">
                 <div>
                     <h2 className="text-3xl font-bold text-white flex items-center gap-2"><LayoutTemplate className="text-blue-500"/> Template Manager</h2>
@@ -168,17 +144,27 @@ const UserTemplates = () => {
                         {loading ? <p className="text-white text-center">Loading...</p> : templates.length === 0 ? <p className="text-slate-500 text-center">No templates found.</p> : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {templates.map((tpl) => (
-                                    <div key={tpl.id} className="bg-[#1e293b]/50 border border-white/5 p-5 rounded-2xl hover:border-blue-500/30 transition">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <h3 className="text-white font-bold text-lg">{tpl.name}</h3>
-                                            {getStatusBadge(tpl.status)}
+                                    <div key={tpl.id} className="bg-[#1e293b]/50 border border-white/5 p-5 rounded-2xl hover:border-blue-500/30 transition relative group">
+                                        
+                                        {/* 🔥 DELETE BUTTON */}
+                                        <button 
+                                            onClick={() => handleDeleteTemplate(tpl.name)} 
+                                            className="absolute top-4 right-4 p-2 bg-red-500/10 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition hover:bg-red-500 hover:text-white"
+                                            title="Delete Template"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+
+                                        <div className="flex justify-between items-start mb-2 pr-10">
+                                            <h3 className="text-white font-bold text-lg truncate">{tpl.name}</h3>
                                         </div>
+                                        <div className="mb-3">{getStatusBadge(tpl.status)}</div>
                                         <p className="text-slate-500 text-xs uppercase font-bold mb-3">{tpl.category} • {tpl.language}</p>
                                         <div className="bg-black/30 p-3 rounded-lg text-slate-300 text-sm mb-3 whitespace-pre-wrap font-mono">
                                             {tpl.components.find(c => c.type === 'BODY')?.text}
                                         </div>
                                         <div className="flex justify-between items-center mt-2">
-                                            <span className="text-xs text-slate-500">ID: {tpl.id}</span>
+                                            <span className="text-[10px] text-slate-600">ID: {tpl.id}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -220,7 +206,7 @@ const UserTemplates = () => {
                                     <label className="text-xs text-slate-400 uppercase font-bold">Header Type</label>
                                     <select value={formData.headerType} onChange={e => {
                                         setFormData({...formData, headerType: e.target.value});
-                                        setHeaderMediaUrl(null); // Reset link when changing type
+                                        setHeaderMediaUrl(null); 
                                     }} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none">
                                         <option value="NONE">None</option>
                                         <option value="TEXT">Text Header</option>
@@ -231,7 +217,6 @@ const UserTemplates = () => {
                                 </div>
                             </div>
 
-                            {/* 🔥 HEADER INPUTS */}
                             {formData.headerType === 'TEXT' && (
                                 <div>
                                     <label className="text-xs text-slate-400 uppercase font-bold">Header Text</label>
@@ -248,7 +233,7 @@ const UserTemplates = () => {
                                             {uploading ? (
                                                 <div className="flex flex-col items-center">
                                                     <Loader className="animate-spin text-blue-500 mb-2"/>
-                                                    <span className="text-sm text-slate-300">Uploading to Cloudinary...</span>
+                                                    <span className="text-sm text-slate-300">Uploading...</span>
                                                 </div>
                                             ) : (
                                                 <>
@@ -280,14 +265,12 @@ const UserTemplates = () => {
                                             <button type="button" onClick={() => setHeaderMediaUrl(null)} className="text-slate-400 hover:text-red-400"><X size={18}/></button>
                                         </div>
                                     )}
-                                    <p className="text-[10px] text-slate-500 mt-2">File will be uploaded to Cloudinary, and the link will be sent to Meta.</p>
                                 </div>
                             )}
 
                             <div>
                                 <label className="text-xs text-slate-400 uppercase font-bold">Body Text (Message)</label>
                                 <textarea required rows={5} placeholder="Hello {{1}}, we have a special offer..." value={formData.bodyText} onChange={e => setFormData({...formData, bodyText: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white outline-none"/>
-                                <p className="text-[10px] text-slate-500 mt-1">Use {'{{1}}'}, {'{{2}}'} for variables.</p>
                             </div>
 
                             <div>
