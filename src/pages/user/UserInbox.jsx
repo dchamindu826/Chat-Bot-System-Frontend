@@ -168,15 +168,32 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       let actualMediaUrl = null;
 
       if (template.components) {
-          // 🔥 වෙනස: UI එකේ (අපේ Chat Area එකේ) පෙන්නන්න විතරක් පින්තූරෙ ලින්ක් එක ගන්නවා.
-          // හැබැයි මේක Meta එකට යවන 'sendComponents' එකට දාන්නේ නෑ!
+          // 🔥 1. HEADER (IMAGE/VIDEO) අනිවාර්යයෙන්ම යවන්න ඕනේ!
           const header = template.components.find(c => c.type === 'HEADER');
           if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
+              
+              // Meta එකෙන් දෙන Original Image Link එක ගන්නවා
               if (header.example && header.example.header_url && header.example.header_url[0]) {
                   actualMediaUrl = header.example.header_url[0];
               }
+
+              if (actualMediaUrl) {
+                  // පින්තූරෙ ලින්ක් එක තියෙනවා නම් අනිවාර්යයෙන්ම API එකට යවන Payload එකට ඒක දානවා
+                  sendComponents.push({
+                      type: "header",
+                      parameters: [{
+                          type: header.format.toLowerCase(), 
+                          [header.format.toLowerCase()]: { link: actualMediaUrl }
+                      }]
+                  });
+              } else {
+                  alert("❌ මේ Template එකට අදාල පින්තූරය Meta එකෙන් ලබා දී නැත. කරුණාකර වෙනත් Template එකක් තෝරන්න.");
+                  setSending(false);
+                  return;
+              }
           }
 
+          // 🔥 2. BODY TEXT
           const body = template.components.find(c => c.type === 'BODY');
           if (body) {
               actualBodyText = body.text;
@@ -191,7 +208,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
                   for(let i=0; i<varCount; i++) {
                       params.push({ type: "text", text: customerName });
                   }
-                  sendComponents.push({ type: "body", parameters: params }); // Body Parameters විතරක් යවනවා
+                  sendComponents.push({ type: "body", parameters: params });
               }
           }
       }
@@ -202,7 +219,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               to: targetPhone,              
               templateName: template.name,
               language: template.language || 'en_US',
-              components: sendComponents, // 🔥 දැන් මෙතන Header (Image) එක නෑ!
+              components: sendComponents, // 🔥 දැන් මෙතන Header (Image) + Body දෙකම තියෙනවා!
               templateBodyText: actualBodyText || `Template: ${template.name}`,
               templateMediaUrl: actualMediaUrl // අපේ ඩේටාබේස් එකට විතරක් යවනවා
           };
