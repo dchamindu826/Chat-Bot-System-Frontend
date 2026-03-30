@@ -181,21 +181,23 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       if (template.components) {
           const header = template.components.find(c => c.type === 'HEADER');
           if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
-              // Meta එකෙන් දෙන නියම ලින්ක් එක විතරක් ගන්නවා.
+              
+              // 🔥 මෙන්න මේකයි අලුත් වෙනස! Meta එකේ Example එකක් නැත්නම් අනිවාර්යයෙන්ම මේක යවනවා
+              actualMediaUrl = "https://lumi-automation.com/default-header.png"; 
+
+              // Meta එකේ නියම ලින්ක් එකක් සේව් කරලා තිබ්බොත් ඒක ගන්නවා
               if (header.example && header.example.header_url && header.example.header_url[0]) {
                   actualMediaUrl = header.example.header_url[0];
               }
 
-              // ඇත්තම URL එකක් තිබ්බොත් විතරක් Meta Payload එකට header එක දානවා
-              if (actualMediaUrl) {
-                  sendComponents.push({
-                      type: "header",
-                      parameters: [{
-                          type: header.format.toLowerCase(), 
-                          [header.format.toLowerCase()]: { link: actualMediaUrl }
-                      }]
-                  });
-              }
+              // දැන් අනිවාර්යයෙන්ම Component එක ඇඩ් වෙනවා
+              sendComponents.push({
+                  type: "header",
+                  parameters: [{
+                      type: header.format.toLowerCase(), 
+                      [header.format.toLowerCase()]: { link: actualMediaUrl }
+                  }]
+              });
           }
 
           const body = template.components.find(c => c.type === 'BODY');
