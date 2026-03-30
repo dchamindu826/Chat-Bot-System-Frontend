@@ -711,6 +711,28 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     } catch(err) { alert("Error assigning leads"); }
   };
 
+// 🔥 Manager ගේ "Mark All as Read" Function එක
+  const handleMarkAllRead = async () => {
+      if (!window.confirm("Are you sure you want to mark ALL unread messages as read?")) return;
+      
+      // Frontend එකේ ක්ෂණිකව ඔක්කොම 0 කරලා පෙන්නනවා (Optimistic update)
+      setContacts(prev => prev.map(c => ({ ...c, unreadCount: 0, unread_count: 0 })));
+      
+      try {
+          const res = await fetch(`${API_BASE_URL}/api/crm/mark-all-read`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` }
+          });
+          if (!res.ok) {
+              alert("Failed to update database.");
+              loadData(); // Database එකේ අවුලක් ගියොත් පරණ ඩේටා ටික ආයෙ ගන්නවා
+          }
+      } catch (err) {
+          console.error(err);
+          loadData();
+      }
+  };
+
   const filteredContacts = useMemo(() => {
     return contacts
       .filter(c => {
@@ -792,7 +814,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
     showTemplates, setShowTemplates, templates, suggestedReplies, handleSelectTemplate, handleTyping, handleSelectAutoSuggest, fetchQuickReplies,
     newTemplateTitle, setNewTemplateTitle, newTemplateMsg, setNewTemplateMsg, isCreatingTemplate, setIsCreatingTemplate,
     uploadingTemplateMedia, templateMediaPreview, setTemplateMediaPreview, handleTemplateMediaUpload, handleCreateQuickReply, handleDeleteQuickReply,
-    replyingTo, setReplyingTo, loadData, handleSendMessage, filteredContacts, userRole, userId
+    replyingTo, setReplyingTo, loadData, handleSendMessage, filteredContacts, userRole, userId, handleMarkAllRead
   };
 
   const content = (

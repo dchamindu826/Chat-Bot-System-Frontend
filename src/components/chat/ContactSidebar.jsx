@@ -104,11 +104,16 @@ const ContactSidebar = (props) => {
                         <button onClick={toggleDarkMode} className={`p-2 rounded-lg transition ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                             {isDarkMode ? <Sun size={16}/> : <Moon size={16}/>}
                         </button>
-                        <button onClick={loadData} className={`p-2 rounded-lg transition ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><RefreshCw size={16}/></button>
+                        <button onClick={loadData} className={`p-2 rounded-lg transition ${isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} title="Refresh"><RefreshCw size={16}/></button>
                         {userRole !== 'agent' && (
-                             <button onClick={() => setShowAssignModal(true)} className={`p-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-lg transition`} title="Bulk Assign">
-                                <Zap size={16} />
-                             </button>
+                            <>
+                                 <button onClick={props.handleMarkAllRead} className={`p-2 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-lg transition`} title="Mark All as Read">
+                                    <CheckSquare size={16} />
+                                 </button>
+                                 <button onClick={() => setShowAssignModal(true)} className={`p-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-lg transition`} title="Bulk Assign">
+                                    <Zap size={16} />
+                                 </button>
+                            </>
                         )}
                     </div>
                 </div>
