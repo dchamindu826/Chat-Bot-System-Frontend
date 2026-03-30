@@ -163,7 +163,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           return;
       }
 
-      // 1. ඇත්තම Body Text එක අරගමු
       let actualBodyText = "";
       const bodyObj = template.components.find(c => c.type === 'BODY');
       if (bodyObj) {
@@ -174,7 +173,6 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           actualBodyText = actualBodyText.replace(/\{\{\d+\}\}/g, ""); 
       }
 
-      // 2. ඇත්තම පින්තූරෙ අරගමු (මම දාපු බොරු ලින්ක් ඔක්කොම අයින් කළා!)
       let actualMediaUrl = null;
       let sendComponents = [];
 
@@ -182,15 +180,15 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           const header = template.components.find(c => c.type === 'HEADER');
           if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
               
-              // 🔥 මෙන්න මේකයි අලුත් වෙනස! Meta එකේ Example එකක් නැත්නම් අනිවාර්යයෙන්ම මේක යවනවා
-              actualMediaUrl = "https://lumi-automation.com/default-header.png"; 
-
-              // Meta එකේ නියම ලින්ක් එකක් සේව් කරලා තිබ්බොත් ඒක ගන්නවා
+              // 🔥 FIX: අපි නියම පින්තූරෙ හොයනවා. ඒක නැත්නම්, 100% වැඩ කරන පින්තූරයක් Fallback එකට දෙනවා
+              // (lumi-automation ලින්ක් එක බොරු නිසා ඒක අයින් කළා!)
+              actualMediaUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&auto=format&fit=crop"; 
+              
+              // Meta එකේ Example ලින්ක් එක තියෙනවද කියලා බලනවා
               if (header.example && header.example.header_url && header.example.header_url[0]) {
                   actualMediaUrl = header.example.header_url[0];
               }
 
-              // දැන් අනිවාර්යයෙන්ම Component එක ඇඩ් වෙනවා
               sendComponents.push({
                   type: "header",
                   parameters: [{
@@ -221,7 +219,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               language: template.language || 'en_US',
               components: sendComponents,
               templateBodyText: actualBodyText || `Template: ${template.name}`,
-              templateMediaUrl: actualMediaUrl // 🔥 ඇත්තම පින්තූරෙ!
+              templateMediaUrl: actualMediaUrl // ඇත්ත පින්තූරෙ Backend එකට යනවා
           };
 
           const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
