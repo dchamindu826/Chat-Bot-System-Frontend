@@ -163,36 +163,39 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           return;
       }
 
-      // 🔥 1. සම්පූර්ණ මැසේජ් එක (Body එක) Chat එකේ පෙන්නන්න හදාගැනීම
+      // 1. ඇත්තම Body Text එක අරගමු
       let actualBodyText = "";
       const bodyObj = template.components.find(c => c.type === 'BODY');
       if (bodyObj) {
           actualBodyText = bodyObj.text;
           let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
               ? selectedContact.name : "Customer";
-          // {{1}} වගේ තියෙන තැන් වලට නම දානවා preview එකට
           actualBodyText = actualBodyText.replace(/\{\{1\}\}/g, customerName);
           actualBodyText = actualBodyText.replace(/\{\{\d+\}\}/g, ""); 
       }
 
+      // 2. ඇත්තම පින්තූරෙ අරගමු (මම දාපු බොරු ලින්ක් ඔක්කොම අයින් කළා!)
       let actualMediaUrl = null;
       let sendComponents = [];
 
       if (template.components) {
           const header = template.components.find(c => c.type === 'HEADER');
           if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
-              // 🔥 2. Valid නැති ලින්ක් ගියොත් Meta එකෙන් රිජෙක්ට් කරන නිසා 100% වැඩ කරන Fallback එකක් දැම්මා
-              actualMediaUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&auto=format&fit=crop"; 
+              // Meta එකෙන් දෙන නියම ලින්ක් එක විතරක් ගන්නවා.
               if (header.example && header.example.header_url && header.example.header_url[0]) {
                   actualMediaUrl = header.example.header_url[0];
               }
-              sendComponents.push({
-                  type: "header",
-                  parameters: [{
-                      type: header.format.toLowerCase(), 
-                      [header.format.toLowerCase()]: { link: actualMediaUrl }
-                  }]
-              });
+
+              // ඇත්තම URL එකක් තිබ්බොත් විතරක් Meta Payload එකට header එක දානවා
+              if (actualMediaUrl) {
+                  sendComponents.push({
+                      type: "header",
+                      parameters: [{
+                          type: header.format.toLowerCase(), 
+                          [header.format.toLowerCase()]: { link: actualMediaUrl }
+                      }]
+                  });
+              }
           }
 
           const body = template.components.find(c => c.type === 'BODY');
@@ -215,8 +218,8 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               templateName: template.name,
               language: template.language || 'en_US',
               components: sendComponents,
-              templateBodyText: actualBodyText || `Template: ${template.name}`, // 🔥 ඇත්තම මැසේජ් එක යවනවා
-              templateMediaUrl: actualMediaUrl // 🔥 ඇත්තම පින්තූරෙත් යවනවා
+              templateBodyText: actualBodyText || `Template: ${template.name}`,
+              templateMediaUrl: actualMediaUrl // 🔥 ඇත්තම පින්තූරෙ!
           };
 
           const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
@@ -227,12 +230,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           
           if(res.ok) {
               const sentMsg = await res.json();
-              
-              // 🔥 මෙතනත් UI එක Update කරන්නේ ඇත්තම Text එකෙන්
               setMessages(prev => [...prev, sentMsg]);
               setShowSendTemplateModal(false);
               setContacts(prev => prev.map(c => (c._id === targetId || c.id === targetId) ? { ...c, lastMessage: actualBodyText.substring(0, 30) + '...', lastMessageTime: new Date().toISOString() } : c));
-              
               alert("✅ Template Sent Successfully!");
           } else {
               const errorData = await res.json();
