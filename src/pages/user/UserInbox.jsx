@@ -141,7 +141,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { console.error(err); }
   };
     
- const handleSendTemplateMessage = async (template) => {
+const handleSendTemplateMessage = async (template) => {
       if(!selectedContact) {
           alert("❌ Error: No contact selected!");
           return;
@@ -149,7 +149,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       
       setSending(true);
 
-      let targetPhone = selectedContact.phoneNumber || selectedContact.phone_number || selectedContact.phone || selectedContact.name || "";
+      let targetPhone = selectedContact.phoneNumber || selectedContact.phone_number || "";
       let targetId = selectedContact._id || selectedContact.id || "";
       targetPhone = targetPhone.toString().replace(/\D/g, '');
 
@@ -157,58 +157,62 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
           targetPhone = '94' + targetPhone.substring(1);
       }
 
-      if (!targetPhone || targetPhone.trim() === "") {
-          alert(`❌ Error: Cannot find a valid phone number!`);
-          setSending(false);
-          return;
-      }
-
       let actualBodyText = "";
       let sendComponents = [];
       let actualMediaUrl = null;
 
       if (template.components) {
-          // 🔥 1. HEADER (IMAGE/VIDEO) අනිවාර්යයෙන්ම යවන්න ඕනේ!
+          // --- 1. HEADER (IMAGE/VIDEO/DOCUMENT) ---
           const header = template.components.find(c => c.type === 'HEADER');
           if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
               
-              // Meta එකෙන් දෙන Original Image Link එක ගන්නවා
+              // Meta එකෙන් දෙන link එක තියෙනවා නම් ඒක ගන්නවා
               if (header.example && header.example.header_url && header.example.header_url[0]) {
                   actualMediaUrl = header.example.header_url[0];
+              } 
+              // 🔥 ලොකුම වෙනස: Meta එකෙන් link එක එවන්නේ නැත්නම්, 
+              // අපි template එක create කරද්දී පාවිච්චි කරපු 'header_handle' එක බලනවා
+              else if (header.example && header.example.header_handle && header.example.header_handle[0]) {
+                  // handle එක විතරක් යවන්න පුළුවන් (Meta API එක මේකත් ගන්නවා)
+                  actualMediaUrl = header.example.header_handle[0];
               }
 
               if (actualMediaUrl) {
-                  // පින්තූරෙ ලින්ක් එක තියෙනවා නම් අනිවාර්යයෙන්ම API එකට යවන Payload එකට ඒක දානවා
+                  const mediaParam = { type: header.format.toLowerCase() };
+                  // Link එකක් නම් 'link' key එක, handle එකක් නම් 'handle' key එක පාවිච්චි කරනවා
+                  if (actualMediaUrl.startsWith('http')) {
+                      mediaParam[header.format.toLowerCase()] = { link: actualMediaUrl };
+                  } else {
+                      mediaParam[header.format.toLowerCase()] = { handle: actualMediaUrl };
+                  }
+
                   sendComponents.push({
                       type: "header",
-                      parameters: [{
-                          type: header.format.toLowerCase(), 
-                          [header.format.toLowerCase()]: { link: actualMediaUrl }
-                      }]
+                      parameters: [mediaParam]
                   });
               } else {
-                  alert("❌ මේ Template එකට අදාල පින්තූරය Meta එකෙන් ලබා දී නැත. කරුණාකර වෙනත් Template එකක් තෝරන්න.");
+                  // තාමත් media එකක් හොයාගන්න බැරි නම්, alert එකක් දෙනවා
+                  alert("❌ Template Error: Meta did not provide the image/video for this approved template. Please try refreshing or re-creating the template.");
                   setSending(false);
                   return;
               }
           }
 
-          // 🔥 2. BODY TEXT
+          // --- 2. BODY TEXT & VARIABLES ---
           const body = template.components.find(c => c.type === 'BODY');
           if (body) {
               actualBodyText = body.text;
-              let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
+              let customerName = (selectedContact.name && !selectedContact.name.toLowerCase().includes('guest')) 
                   ? selectedContact.name : "Customer";
+              
+              // Variable {{1}} replace කරනවා
               actualBodyText = actualBodyText.replace(/\{\{1\}\}/g, customerName);
-              actualBodyText = actualBodyText.replace(/\{\{\d+\}\}/g, ""); 
 
               if (body.text.includes('{{1}}')) {
-                  const varCount = (body.text.match(/{{/g) || []).length;
-                  let params = [];
-                  for(let i=0; i<varCount; i++) {
-                      params.push({ type: "text", text: customerName });
-                  }
-                  sendComponents.push({ type: "body", parameters: params });
+                  sendComponents.push({
+                      type: "body",
+                      parameters: [{ type: "text", text: customerName }]
+                  });
               }
           }
       }
@@ -219,9 +223,9 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               to: targetPhone,              
               templateName: template.name,
               language: template.language || 'en_US',
-              components: sendComponents, // 🔥 දැන් මෙතන Header (Image) + Body දෙකම තියෙනවා!
+              components: sendComponents, 
               templateBodyText: actualBodyText || `Template: ${template.name}`,
-              templateMediaUrl: actualMediaUrl // අපේ ඩේටාබේස් එකට විතරක් යවනවා
+              templateMediaUrl: actualMediaUrl.startsWith('http') ? actualMediaUrl : null
           };
 
           const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
@@ -230,18 +234,17 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
               body: JSON.stringify(payload)
           });
           
+          const data = await res.json();
+
           if(res.ok) {
-              const sentMsg = await res.json();
-              setMessages(prev => [...prev, sentMsg]);
+              setMessages(prev => [...prev, data]);
               setShowSendTemplateModal(false);
-              setContacts(prev => prev.map(c => (c._id === targetId || c.id === targetId) ? { ...c, lastMessage: actualBodyText.substring(0, 30) + '...', lastMessageTime: new Date().toISOString() } : c));
               alert("✅ Template Sent Successfully!");
           } else {
-              const errorData = await res.json();
-              alert(`❌ Message Failed: ${errorData.message}`);
+              alert(`❌ Message Failed: ${data.message || "Meta API error"}`);
           }
       } catch(err) { 
-          alert("❌ Message Failed! Check your internet connection."); 
+          alert("❌ System Error: Check your connection."); 
       } 
       finally { setSending(false); }
   };
