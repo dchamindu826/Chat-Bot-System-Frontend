@@ -141,6 +141,7 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
       } catch(err) { console.error(err); }
   };
     
+// UserInbox.jsx හි handleSendTemplateMessage function එක
 const handleSendTemplateMessage = async (template) => {
     if (!selectedContact) {
         alert("❌ Error: No contact selected!");
@@ -157,31 +158,32 @@ const handleSendTemplateMessage = async (template) => {
         targetPhone = '94' + targetPhone.substring(1);
     }
 
-    if (!targetPhone || targetPhone.trim() === "") {
-        alert(`❌ Error: Cannot find a valid phone number!`);
-        setSending(false);
-        return;
-    }
-
     let actualBodyText = "";
     let sendComponents = [];
     let actualMediaUrl = null;
 
-    console.log("Original Template from Meta:", template); // 🔥 Frontend console එකේ බලන්න
-
     if (template.components && Array.isArray(template.components)) {
         
-        // --- 1. HEADER (IMAGE/VIDEO) ---
+        // --- 1. HEADER (IMAGE/VIDEO/DOCUMENT) ---
         const header = template.components.find(c => c.type === 'HEADER');
         if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
-            actualMediaUrl = header.example?.header_handle?.[0] || header.example?.header_url?.[0];
             
+            // 🔥 CLOUDINARY LOGIC: User අලුතින් 📎 icon එකෙන් attach කරපු media එක ගන්නවා අනිවාර්යයෙන්ම
+            if (mediaPreview && mediaPreview.url) {
+                actualMediaUrl = mediaPreview.url;
+            } else {
+                // Media එකක් attach කරලා නැත්නම් Error එකක් දෙනවා
+                alert(`❌ This template requires a ${header.format}.\n\nPlease close this modal, attach a file using the 📎 paperclip icon below, and try sending the template again.`);
+                setSending(false);
+                return; // මෙතනින් නතර කරනවා, Meta එකේ පරණ URL ගන්නේ නෑ.
+            }
+
             if (actualMediaUrl) {
                 sendComponents.push({
                     type: "header",
                     parameters: [{
                         type: header.format.toLowerCase(), 
-                        [header.format.toLowerCase()]: actualMediaUrl.startsWith('http') ? { link: actualMediaUrl } : { handle: actualMediaUrl }
+                        [header.format.toLowerCase()]: { link: actualMediaUrl }
                     }]
                 });
             }
