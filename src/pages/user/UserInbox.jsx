@@ -168,36 +168,29 @@ const handleSendTemplateMessage = async (template) => {
     let sendComponents = [];
     let actualMediaUrl = null;
 
+    console.log("👉 SELECTED TEMPLATE:", template);
+
     if (template.components && Array.isArray(template.components)) {
         
-        // --- 1. HEADER (IMAGE/VIDEO/DOCUMENT) ---
         const header = template.components.find(c => c.type === 'HEADER');
         if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
             
-            // 🔥 SMART FALLBACK LOGIC: 
-            // 1. අපේ Database එකේ සේව් වුණ Cloudinary URL එක තියෙනවද බලනවා (වඩාත් සුදුසුම ක්‍රමය)
+            console.log("👉 CLOUDINARY URL FROM DB:", template.cloudinary_url);
+
             if (template.cloudinary_url) {
                 actualMediaUrl = template.cloudinary_url;
-            } 
-            // 2. User 📎 Paperclip එකෙන් අලුත් පින්තූරයක් දාලද බලනවා
-            else if (mediaPreview && mediaPreview.url) {
+            } else if (mediaPreview && mediaPreview.url) {
                 actualMediaUrl = mediaPreview.url;
-            } 
-            // 3. ඒ දෙකම නැත්නම්, Meta එකේ Handle එක ගන්නවා (Handle එක ලේසියෙන් Expire වෙන්නේ නෑ)
-            else if (header.example?.header_handle?.[0] && !header.example.header_handle[0].startsWith('http')) {
+            } else if (header.example?.header_handle?.[0] && !header.example.header_handle[0].startsWith('http')) {
                 actualMediaUrl = header.example.header_handle[0];
-            }
-            // 4. අන්තිම විකල්පය විදිහට Meta එකේ URL එක ගන්නවා
-            else if (header.example?.header_url?.[0]) {
+            } else if (header.example?.header_url?.[0]) {
                 actualMediaUrl = header.example.header_url[0];
             }
 
-            // URL එකක් හෝ Handle එකක් සෙට් වුණා නම් Payload එකට දානවා
             if (actualMediaUrl) {
                 const mediaTypeStr = header.format.toLowerCase();
                 let mediaPayload = {};
                 
-                // http වලින් පටන් ගන්නවා නම් link විදිහට, නැත්නම් handle විදිහට යවනවා
                 if (actualMediaUrl.startsWith('http')) {
                     mediaPayload = { link: actualMediaUrl };
                 } else {
@@ -212,14 +205,13 @@ const handleSendTemplateMessage = async (template) => {
                     }]
                 });
             } else {
-                // කිසිම විදිහකින් Media එකක් හොයාගන්න බැරි වුණොත් විතරක් මේ Error එක දෙනවා
-                alert(`❌ This template requires a ${header.format}.\n\nPlease close this modal, attach a file using the 📎 paperclip icon below, and try sending the template again.`);
+                // Database එකෙනුත් එන්නේ නැත්නම් මේ විදිහට කියනවා
+                alert(`❌ Database Error: Could not find the saved Image URL for this template.\n\nPlease close this window, attach the image manually using the 📎 paperclip icon below, and send the template again.`);
                 setSending(false);
                 return;
             }
         }
 
-        // --- 2. BODY TEXT ---
         const body = template.components.find(c => c.type === 'BODY');
         if (body) {
             actualBodyText = body.text || "";
@@ -238,7 +230,6 @@ const handleSendTemplateMessage = async (template) => {
             }
         }
 
-        // --- 3. BUTTONS ---
         const buttonsComp = template.components.find(c => c.type === 'BUTTONS' || c.type === 'BUTTON');
         if (buttonsComp) {
             if (buttonsComp.buttons && Array.isArray(buttonsComp.buttons)) {
