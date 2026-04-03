@@ -175,16 +175,14 @@ const handleSendTemplateMessage = async (template) => {
         const header = template.components.find(c => c.type === 'HEADER');
         if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
             
-            console.log("👉 CLOUDINARY URL FROM DB:", template.cloudinary_url);
-
             if (template.cloudinary_url) {
-                actualMediaUrl = template.cloudinary_url;
+                actualMediaUrl = template.cloudinary_url; // 1st Priority: Our DB Cloudinary URL
             } else if (mediaPreview && mediaPreview.url) {
-                actualMediaUrl = mediaPreview.url;
+                actualMediaUrl = mediaPreview.url; // 2nd Priority: Manually attached file
             } else if (header.example?.header_handle?.[0] && !header.example.header_handle[0].startsWith('http')) {
-                actualMediaUrl = header.example.header_handle[0];
+                actualMediaUrl = header.example.header_handle[0]; // 3rd Priority: Meta Handle
             } else if (header.example?.header_url?.[0]) {
-                actualMediaUrl = header.example.header_url[0];
+                actualMediaUrl = header.example.header_url[0]; // 4th Priority: Meta Direct URL
             }
 
             if (actualMediaUrl) {
@@ -205,8 +203,8 @@ const handleSendTemplateMessage = async (template) => {
                     }]
                 });
             } else {
-                // Database එකෙනුත් එන්නේ නැත්නම් මේ විදිහට කියනවා
-                alert(`❌ Database Error: Could not find the saved Image URL for this template.\n\nPlease close this window, attach the image manually using the 📎 paperclip icon below, and send the template again.`);
+                // URL එකක් කොහොමත්ම නැත්නම් විතරක් Error එක දෙනවා
+                alert(`❌ No media URL found.\n\nPlease close this window, attach an image using the 📎 paperclip icon, and try again.`);
                 setSending(false);
                 return;
             }
