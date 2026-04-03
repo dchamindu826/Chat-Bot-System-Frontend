@@ -142,112 +142,115 @@ const UserInbox = ({ isEmbedded = false, initialSelectedContact = null }) => {
   };
     
 const handleSendTemplateMessage = async (template) => {
-      if(!selectedContact) {
-          alert("❌ Error: No contact selected!");
-          return;
-      }
-      
-      setSending(true);
+    if (!selectedContact) {
+        alert("❌ Error: No contact selected!");
+        return;
+    }
+    
+    setSending(true);
 
-      let targetPhone = selectedContact.phoneNumber || selectedContact.phone_number || "";
-      let targetId = selectedContact._id || selectedContact.id || "";
-      targetPhone = targetPhone.toString().replace(/\D/g, '');
+    let targetPhone = selectedContact.phoneNumber || selectedContact.phone_number || selectedContact.phone || selectedContact.name || "";
+    let targetId = selectedContact._id || selectedContact.id || "";
+    targetPhone = targetPhone.toString().replace(/\D/g, '');
 
-      if (targetPhone.startsWith('0')) {
-          targetPhone = '94' + targetPhone.substring(1);
-      }
+    if (targetPhone.startsWith('0')) {
+        targetPhone = '94' + targetPhone.substring(1);
+    }
 
-      let actualBodyText = "";
-      let sendComponents = [];
-      let actualMediaUrl = null;
+    if (!targetPhone || targetPhone.trim() === "") {
+        alert(`❌ Error: Cannot find a valid phone number!`);
+        setSending(false);
+        return;
+    }
 
-      if (template.components) {
-          // --- 1. HEADER (IMAGE/VIDEO/DOCUMENT) ---
-          const header = template.components.find(c => c.type === 'HEADER');
-          if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
-              
-              // Meta එකෙන් දෙන link එක තියෙනවා නම් ඒක ගන්නවා
-              if (header.example && header.example.header_url && header.example.header_url[0]) {
-                  actualMediaUrl = header.example.header_url[0];
-              } 
-              // 🔥 ලොකුම වෙනස: Meta එකෙන් link එක එවන්නේ නැත්නම්, 
-              // අපි template එක create කරද්දී පාවිච්චි කරපු 'header_handle' එක බලනවා
-              else if (header.example && header.example.header_handle && header.example.header_handle[0]) {
-                  // handle එක විතරක් යවන්න පුළුවන් (Meta API එක මේකත් ගන්නවා)
-                  actualMediaUrl = header.example.header_handle[0];
-              }
+    let actualBodyText = "";
+    let sendComponents = [];
+    let actualMediaUrl = null;
 
-              if (actualMediaUrl) {
-                  const mediaParam = { type: header.format.toLowerCase() };
-                  // Link එකක් නම් 'link' key එක, handle එකක් නම් 'handle' key එක පාවිච්චි කරනවා
-                  if (actualMediaUrl.startsWith('http')) {
-                      mediaParam[header.format.toLowerCase()] = { link: actualMediaUrl };
-                  } else {
-                      mediaParam[header.format.toLowerCase()] = { handle: actualMediaUrl };
-                  }
+    if (template.components) {
+        // --- 1. HEADER (IMAGE/VIDEO) ---
+        const header = template.components.find(c => c.type === 'HEADER');
+        if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
+            actualMediaUrl = header.example?.header_handle?.[0] || header.example?.header_url?.[0];
+            
+            if (actualMediaUrl) {
+                sendComponents.push({
+                    type: "header",
+                    parameters: [{
+                        type: header.format.toLowerCase(), 
+                        [header.format.toLowerCase()]: actualMediaUrl.startsWith('http') ? { link: actualMediaUrl } : { handle: actualMediaUrl }
+                    }]
+                });
+            }
+        }
 
-                  sendComponents.push({
-                      type: "header",
-                      parameters: [mediaParam]
-                  });
-              } else {
-                  // තාමත් media එකක් හොයාගන්න බැරි නම්, alert එකක් දෙනවා
-                  alert("❌ Template Error: Meta did not provide the image/video for this approved template. Please try refreshing or re-creating the template.");
-                  setSending(false);
-                  return;
-              }
-          }
+        // --- 2. BODY TEXT ---
+        const body = template.components.find(c => c.type === 'BODY');
+        if (body) {
+            actualBodyText = body.text;
+            let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
+                ? selectedContact.name : "Customer";
 
-          // --- 2. BODY TEXT & VARIABLES ---
-          const body = template.components.find(c => c.type === 'BODY');
-          if (body) {
-              actualBodyText = body.text;
-              let customerName = (selectedContact.name && !selectedContact.name.toLowerCase().includes('guest')) 
-                  ? selectedContact.name : "Customer";
-              
-              // Variable {{1}} replace කරනවා
-              actualBodyText = actualBodyText.replace(/\{\{1\}\}/g, customerName);
+            // Variables තියෙනවා නම්
+            if (actualBodyText.includes('{{1}}')) {
+                const varCount = (actualBodyText.match(/{{/g) || []).length;
+                let params = [];
+                for(let i=0; i<varCount; i++) {
+                    params.push({ type: "text", text: customerName });
+                }
+                sendComponents.push({ type: "body", parameters: params });
+                
+                // DB එකේ සේව් කරන්න නම රීප්ලේස් කරනවා
+                actualBodyText = actualBodyText.replace(/\{\{\d+\}\}/g, customerName);
+            }
+        }
 
-              if (body.text.includes('{{1}}')) {
-                  sendComponents.push({
-                      type: "body",
-                      parameters: [{ type: "text", text: customerName }]
-                  });
-              }
-          }
-      }
+        // --- 3. BUTTONS 🔥 (මෙන්න මේ කෑල්ල තමයි අඩුවෙලා තිබ්බේ) ---
+        const buttonsComp = template.components.find(c => c.type === 'BUTTONS');
+        if (buttonsComp && buttonsComp.buttons) {
+            buttonsComp.buttons.forEach((btn, idx) => {
+                sendComponents.push({
+                    type: "button",
+                    sub_type: "quick_reply",
+                    index: idx,
+                    parameters: [{ type: "payload", payload: `BTN_CLICKED_${idx}` }]
+                });
+            });
+        }
+    }
 
-      try {
-          const payload = {
-              contactId: targetId,
-              to: targetPhone,              
-              templateName: template.name,
-              language: template.language || 'en_US',
-              components: sendComponents, 
-              templateBodyText: actualBodyText || `Template: ${template.name}`,
-              templateMediaUrl: actualMediaUrl.startsWith('http') ? actualMediaUrl : null
-          };
+    try {
+        const payload = {
+            contactId: targetId,
+            to: targetPhone,              
+            templateName: template.name,
+            language: template.language || 'en_US',
+            components: sendComponents, 
+            templateBodyText: actualBodyText || `Template: ${template.name}`,
+            templateMediaUrl: actualMediaUrl?.startsWith('http') ? actualMediaUrl : null 
+        };
 
-          const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
-              body: JSON.stringify(payload)
-          });
-          
-          const data = await res.json();
+        const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
 
-          if(res.ok) {
-              setMessages(prev => [...prev, data]);
-              setShowSendTemplateModal(false);
-              alert("✅ Template Sent Successfully!");
-          } else {
-              alert(`❌ Message Failed: ${data.message || "Meta API error"}`);
-          }
-      } catch(err) { 
-          alert("❌ System Error: Check your connection."); 
-      } 
-      finally { setSending(false); }
-  };
+        if(res.ok) {
+            setMessages(prev => [...prev, data]);
+            setShowSendTemplateModal(false);
+            setContacts(prev => prev.map(c => (c._id === targetId || c.id === targetId) ? { ...c, lastMessage: actualBodyText.substring(0, 30) + '...', lastMessageTime: new Date().toISOString() } : c));
+            alert("✅ Template Sent Successfully!");
+        } else {
+            alert(`❌ Message Failed:\n\n${data.message || "Meta API Error"}`);
+        }
+    } catch(err) { 
+        alert(`❌ System Error: Check your connection.`); 
+    } 
+    finally { setSending(false); }
+};
   
   const fetchQuickReplies = async () => {
       try {
