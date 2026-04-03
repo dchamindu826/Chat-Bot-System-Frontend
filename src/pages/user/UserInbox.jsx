@@ -167,7 +167,10 @@ const handleSendTemplateMessage = async (template) => {
     let sendComponents = [];
     let actualMediaUrl = null;
 
-    if (template.components) {
+    console.log("Original Template from Meta:", template); // 🔥 Frontend console එකේ බලන්න
+
+    if (template.components && Array.isArray(template.components)) {
+        
         // --- 1. HEADER (IMAGE/VIDEO) ---
         const header = template.components.find(c => c.type === 'HEADER');
         if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
@@ -187,7 +190,7 @@ const handleSendTemplateMessage = async (template) => {
         // --- 2. BODY TEXT ---
         const body = template.components.find(c => c.type === 'BODY');
         if (body) {
-            actualBodyText = body.text;
+            actualBodyText = body.text || "";
             let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
                 ? selectedContact.name : "Customer";
 
@@ -203,19 +206,35 @@ const handleSendTemplateMessage = async (template) => {
             }
         }
 
-        // --- 3. BUTTONS 🔥 (මේක තමයි අඩුවෙලා තිබ්බේ) ---
-        const buttonsComp = template.components.find(c => c.type === 'BUTTONS');
-        if (buttonsComp && buttonsComp.buttons) {
-            buttonsComp.buttons.forEach((btn, idx) => {
-                sendComponents.push({
+        // --- 3. BUTTONS 🔥 (SUPER SAFE METHOD) ---
+        // Meta එක සමහරවිට 'BUTTONS' කියලා එවන්නේ නෑ, 'BUTTON' කියලා එවන වෙලාවලුත් තියෙනවා!
+        const buttonsComp = template.components.find(c => c.type === 'BUTTONS' || c.type === 'BUTTON');
+        
+        if (buttonsComp) {
+            // ක්‍රමය 1: buttons array එකක් ඇතුළේ තියෙනවා නම් (අපි හැදුව විදිහ)
+            if (buttonsComp.buttons && Array.isArray(buttonsComp.buttons)) {
+                 buttonsComp.buttons.forEach((btn, idx) => {
+                    sendComponents.push({
+                        type: "button",
+                        sub_type: "quick_reply",
+                        index: idx,
+                        parameters: [{ type: "payload", payload: `BTN_CLICKED_${idx}` }]
+                    });
+                });
+            } 
+            // ක්‍රමය 2: කෙලින්ම component එකම button එකක් නම් (Meta එකේ සමහර පරණ templates)
+            else if (buttonsComp.type === 'BUTTON') {
+                 sendComponents.push({
                     type: "button",
                     sub_type: "quick_reply",
-                    index: idx,
-                    parameters: [{ type: "payload", payload: `BTN_CLICKED_${idx}` }]
+                    index: 0,
+                    parameters: [{ type: "payload", payload: `BTN_CLICKED_0` }]
                 });
-            });
+            }
         }
     }
+
+    console.log("FINAL COMPONENTS TO SEND:", sendComponents); // 🔥 මේකත් Frontend console එකේ බලන්න
 
     try {
         const payload = {
@@ -228,7 +247,6 @@ const handleSendTemplateMessage = async (template) => {
             templateMediaUrl: actualMediaUrl?.startsWith('http') ? actualMediaUrl : null 
         };
 
-        // ... ඉතුරු ටික (fetch API call එක)
         const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
