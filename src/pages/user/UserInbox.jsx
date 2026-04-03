@@ -191,7 +191,6 @@ const handleSendTemplateMessage = async (template) => {
             let customerName = (selectedContact.name && !selectedContact.name.match(/^[0-9]+$/) && !selectedContact.name.toLowerCase().includes('guest')) 
                 ? selectedContact.name : "Customer";
 
-            // Variables තියෙනවා නම්
             if (actualBodyText.includes('{{1}}')) {
                 const varCount = (actualBodyText.match(/{{/g) || []).length;
                 let params = [];
@@ -200,12 +199,11 @@ const handleSendTemplateMessage = async (template) => {
                 }
                 sendComponents.push({ type: "body", parameters: params });
                 
-                // DB එකේ සේව් කරන්න නම රීප්ලේස් කරනවා
                 actualBodyText = actualBodyText.replace(/\{\{\d+\}\}/g, customerName);
             }
         }
 
-        // --- 3. BUTTONS 🔥 (මෙන්න මේ කෑල්ල තමයි අඩුවෙලා තිබ්බේ) ---
+        // --- 3. BUTTONS 🔥 (මේක තමයි අඩුවෙලා තිබ්බේ) ---
         const buttonsComp = template.components.find(c => c.type === 'BUTTONS');
         if (buttonsComp && buttonsComp.buttons) {
             buttonsComp.buttons.forEach((btn, idx) => {
@@ -230,6 +228,7 @@ const handleSendTemplateMessage = async (template) => {
             templateMediaUrl: actualMediaUrl?.startsWith('http') ? actualMediaUrl : null 
         };
 
+        // ... ඉතුරු ටික (fetch API call එක)
         const res = await fetch(`${API_BASE_URL}/api/templates/send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', token: `Bearer ${token}` },
