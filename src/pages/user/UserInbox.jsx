@@ -158,6 +158,12 @@ const handleSendTemplateMessage = async (template) => {
         targetPhone = '94' + targetPhone.substring(1);
     }
 
+    if (!targetPhone || targetPhone.trim() === "") {
+        alert(`❌ Error: Cannot find a valid phone number!`);
+        setSending(false);
+        return;
+    }
+
     let actualBodyText = "";
     let sendComponents = [];
     let actualMediaUrl = null;
@@ -168,24 +174,48 @@ const handleSendTemplateMessage = async (template) => {
         const header = template.components.find(c => c.type === 'HEADER');
         if (header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)) {
             
-            // 🔥 CLOUDINARY LOGIC: User අලුතින් 📎 icon එකෙන් attach කරපු media එක ගන්නවා අනිවාර්යයෙන්ම
-            if (mediaPreview && mediaPreview.url) {
+            // 🔥 SMART FALLBACK LOGIC: 
+            // 1. අපේ Database එකේ සේව් වුණ Cloudinary URL එක තියෙනවද බලනවා (වඩාත් සුදුසුම ක්‍රමය)
+            if (template.cloudinary_url) {
+                actualMediaUrl = template.cloudinary_url;
+            } 
+            // 2. User 📎 Paperclip එකෙන් අලුත් පින්තූරයක් දාලද බලනවා
+            else if (mediaPreview && mediaPreview.url) {
                 actualMediaUrl = mediaPreview.url;
-            } else {
-                // Media එකක් attach කරලා නැත්නම් Error එකක් දෙනවා
-                alert(`❌ This template requires a ${header.format}.\n\nPlease close this modal, attach a file using the 📎 paperclip icon below, and try sending the template again.`);
-                setSending(false);
-                return; // මෙතනින් නතර කරනවා, Meta එකේ පරණ URL ගන්නේ නෑ.
+            } 
+            // 3. ඒ දෙකම නැත්නම්, Meta එකේ Handle එක ගන්නවා (Handle එක ලේසියෙන් Expire වෙන්නේ නෑ)
+            else if (header.example?.header_handle?.[0] && !header.example.header_handle[0].startsWith('http')) {
+                actualMediaUrl = header.example.header_handle[0];
+            }
+            // 4. අන්තිම විකල්පය විදිහට Meta එකේ URL එක ගන්නවා
+            else if (header.example?.header_url?.[0]) {
+                actualMediaUrl = header.example.header_url[0];
             }
 
+            // URL එකක් හෝ Handle එකක් සෙට් වුණා නම් Payload එකට දානවා
             if (actualMediaUrl) {
+                const mediaTypeStr = header.format.toLowerCase();
+                let mediaPayload = {};
+                
+                // http වලින් පටන් ගන්නවා නම් link විදිහට, නැත්නම් handle විදිහට යවනවා
+                if (actualMediaUrl.startsWith('http')) {
+                    mediaPayload = { link: actualMediaUrl };
+                } else {
+                    mediaPayload = { handle: actualMediaUrl };
+                }
+
                 sendComponents.push({
                     type: "header",
                     parameters: [{
-                        type: header.format.toLowerCase(), 
-                        [header.format.toLowerCase()]: { link: actualMediaUrl }
+                        type: mediaTypeStr, 
+                        [mediaTypeStr]: mediaPayload
                     }]
                 });
+            } else {
+                // කිසිම විදිහකින් Media එකක් හොයාගන්න බැරි වුණොත් විතරක් මේ Error එක දෙනවා
+                alert(`❌ This template requires a ${header.format}.\n\nPlease close this modal, attach a file using the 📎 paperclip icon below, and try sending the template again.`);
+                setSending(false);
+                return;
             }
         }
 
@@ -208,12 +238,9 @@ const handleSendTemplateMessage = async (template) => {
             }
         }
 
-        // --- 3. BUTTONS 🔥 (SUPER SAFE METHOD) ---
-        // Meta එක සමහරවිට 'BUTTONS' කියලා එවන්නේ නෑ, 'BUTTON' කියලා එවන වෙලාවලුත් තියෙනවා!
+        // --- 3. BUTTONS ---
         const buttonsComp = template.components.find(c => c.type === 'BUTTONS' || c.type === 'BUTTON');
-        
         if (buttonsComp) {
-            // ක්‍රමය 1: buttons array එකක් ඇතුළේ තියෙනවා නම් (අපි හැදුව විදිහ)
             if (buttonsComp.buttons && Array.isArray(buttonsComp.buttons)) {
                  buttonsComp.buttons.forEach((btn, idx) => {
                     sendComponents.push({
@@ -223,9 +250,7 @@ const handleSendTemplateMessage = async (template) => {
                         parameters: [{ type: "payload", payload: `BTN_CLICKED_${idx}` }]
                     });
                 });
-            } 
-            // ක්‍රමය 2: කෙලින්ම component එකම button එකක් නම් (Meta එකේ සමහර පරණ templates)
-            else if (buttonsComp.type === 'BUTTON') {
+            } else if (buttonsComp.type === 'BUTTON') {
                  sendComponents.push({
                     type: "button",
                     sub_type: "quick_reply",
@@ -235,8 +260,6 @@ const handleSendTemplateMessage = async (template) => {
             }
         }
     }
-
-    console.log("FINAL COMPONENTS TO SEND:", sendComponents); // 🔥 මේකත් Frontend console එකේ බලන්න
 
     try {
         const payload = {
@@ -260,10 +283,16 @@ const handleSendTemplateMessage = async (template) => {
         if(res.ok) {
             setMessages(prev => [...prev, data]);
             setShowSendTemplateModal(false);
+            setMediaPreview(null);
             setContacts(prev => prev.map(c => (c._id === targetId || c.id === targetId) ? { ...c, lastMessage: actualBodyText.substring(0, 30) + '...', lastMessageTime: new Date().toISOString() } : c));
             alert("✅ Template Sent Successfully!");
         } else {
-            alert(`❌ Message Failed:\n\n${data.message || "Meta API Error"}`);
+            const errorDetails = JSON.stringify(data);
+            if (errorDetails.includes("403") || errorDetails.includes("Forbidden")) {
+                alert(`❌ Image Expired!\n\nThe default image for this template has expired from Meta's servers.\n\n👉 SOLUTION: Close this window, attach a new Image using the 📎 Paperclip icon, and send the template again.`);
+            } else {
+                alert(`❌ Message Failed:\n\n${data.message || "Meta API Error"}`);
+            }
         }
     } catch(err) { 
         alert(`❌ System Error: Check your connection.`); 
