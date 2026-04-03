@@ -131,12 +131,13 @@ const UserTools = () => {
 
   // --- 4. CREATE BROADCAST (WITH 24H SAFE LOGIC) ---
   const handleCreateCampaign = async () => {
-    if(selectedContacts.length === 0 && useTemplate) return alert("Please select contacts first!");
+    // ටික් කරලා නැත්නම් Error එකක් දෙනවා (Free එකටයි Paid එකටයි දෙකටම)
+    if(selectedContacts.length === 0) return alert("Please select contacts first!");
     
-    // 🔥 අලුත් ලොජික් එක: Custom Message එකක් (Template එකක් නෙමෙයි නම්) කෙලින්ම 24h Safe Endpoint එකට යවනවා
+    // --- FREE BROADCAST LOGIC ---
     if (!useTemplate) {
         if (!customMsg && !mediaUrl) return alert("Please enter a message or select an image!");
-        if(!window.confirm(`Send this Free Broadcast to all active users from the last 24 hours?`)) return;
+        if(!window.confirm(`Send this Free Broadcast to the ${selectedContacts.length} selected users? (Only those active within 24h will receive it)`)) return;
 
         setSending(true);
         let msgType = 'text';
@@ -146,11 +147,18 @@ const UserTools = () => {
             else msgType = 'document';
         }
 
+        // 🔥 ටික් කරපු අයගේ ෆෝන් නම්බර් ටික ගන්නවා
+        const recipientNumbers = selectedContacts.map(id => {
+            const contact = contacts.find(c => c._id === id);
+            return contact ? contact.phoneNumber : null;
+        }).filter(Boolean);
+
         try {
             const payload = {
                 messageText: customMsg,
                 mediaUrl: mediaUrl,
-                mediaType: msgType
+                mediaType: msgType,
+                recipients: recipientNumbers // 🔥 මේක Backend එකට යවනවා
             };
 
             const res = await fetch(`${API_BASE_URL}/api/broadcast/send-24h`, {
@@ -165,6 +173,7 @@ const UserTools = () => {
                 setCustomMsg('');
                 setMediaUrl('');
                 setMediaFile(null);
+                setSelectedContacts([]); // යවලා ඉවර වුනාම ටික් ටික අයින් කරනවා
             } else {
                 alert(`❌ Broadcast Failed: ${data.message}`);
             }
